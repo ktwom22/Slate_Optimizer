@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="grid two">
+  <div class="card">
+    <div class="card-h">
+      <h1>NBA Generator</h1>
+      <p>Run your NBA script and display lineups in a DK-style layout.</p>
+    </div>
+    <div class="card-b">
+      <form class="form" method="POST">
+        <div class="row2">
+          <div>
+            <label>
+              Number of lineups
+              <span class="hint">How many to generate</span>
+            </label>
+            <input name="num_lineups" type="number" min="1" max="150" value="20" />
+          </div>
+
+          <div>
+            <label>
+              Min salary spend
+              <span class="hint">Minimum total salary</span>
+            </label>
+            <input name="min_salary" type="number" min="0" max="50000" value="49000" />
+          </div>
+        </div>
+
+        <div class="row2">
+          <div>
+            <label>
+              Min unique
+              <span class="info" data-tip="Minimum number of different players between lineups. Higher = more diversity but can make optimization harder.">i</span>
+            </label>
+            <input name="min_unique" type="number" min="0" max="7" value="2" />
+          </div>
+
+          <div>
+            <label>
+              Randomness
+              <span class="info" data-tip="Adds small noise to projections. Helps prevent identical lineups. Typical: 0.4–1.0">i</span>
+            </label>
+            <input name="randomness" type="number" step="0.1" min="0" max="3" value="0.8" />
+          </div>
+        </div>
+
+        <button class="btn" type="submit">Generate NBA Lineups</button>
+        <div class="footer-note">NBA output is parsed from your script’s printed lineups.</div>
+      </form>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-h">
+      <h2>Notes</h2>
+      <p>Make sure NBA prints lineup rows consistently.</p>
+    </div>
+    <div class="card-b">
+      <div class="badge">Expected output row format</div>
+      <div class="footer-note" style="margin-top:10px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;">
+        PG  Player Name  TEAM  PG/SF  $7200 proj:51.38
+      </div>
+      <div class="footer-note">
+        If your NBA output differs, paste one printed lineup block and I’ll adjust the parser regex to match it.
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}

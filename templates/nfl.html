@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="grid two">
+  <div class="card">
+    <div class="card-h">
+      <h1>NFL Generator</h1>
+      <p>Build stacked DK Classic lineups with your behind-the-scenes data pull.</p>
+    </div>
+    <div class="card-b">
+      <form class="form" method="POST">
+        <div class="row2">
+          <div>
+            <label>
+              Number of lineups
+              <span class="hint">How many to generate</span>
+            </label>
+            <input name="num_lineups" type="number" min="1" max="150" value="20" />
+          </div>
+
+          <div>
+            <label>
+              Min salary spend
+              <span class="hint">Minimum total salary</span>
+            </label>
+            <input name="min_salary" type="number" min="0" max="50000" value="46000" />
+          </div>
+        </div>
+
+        <div class="row2">
+          <div>
+            <label>
+              Min unique
+              <span class="info" data-tip="Minimum number of different players between any two lineups. Example: min_unique=2 means each lineup must differ by at least 2 players from prior lineups. Higher increases variety but can reduce the number of feasible lineups.">i</span>
+            </label>
+            <input name="min_unique" type="number" min="0" max="8" value="2" />
+          </div>
+
+          <div>
+            <label>
+              Randomness
+              <span class="info" data-tip="Adds small random noise to projections while optimizing. Helps create different lineups on tight slates. Higher = more diversity, but can drift from the pure optimal lineup. Typical: 0.6–1.2">i</span>
+            </label>
+            <input name="randomness" type="number" step="0.1" min="0" max="3" value="1.0" />
+          </div>
+        </div>
+
+        <button class="btn" type="submit">Generate NFL Lineups</button>
+        <div class="footer-note">Your script runs locally via Python. If it times out, try fewer lineups first.</div>
+      </form>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-h">
+      <h2>Notes</h2>
+      <p>What you’ll see on the results screen.</p>
+    </div>
+    <div class="card-b">
+      <ul style="margin:0; padding-left:18px; color:var(--muted); font-size:13px;">
+        <li>Each lineup is shown like DraftKings: POS / Player / Team / Salary / Proj</li>
+        <li>Header shows total salary + projected points</li>
+        <li>If enabled in your generator output, you’ll see template/stack info</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+{% endblock %}

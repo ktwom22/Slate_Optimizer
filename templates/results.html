@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="card" style="margin-top:18px;">
+  <div class="card-h" style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
+    <div>
+      <h1>{{ title }}</h1>
+      <p>DK-style lineup view. Columns: POS • Player • Team • Salary • Projected Points</p>
+    </div>
+    <div style="display:flex; gap:10px; flex-wrap:wrap;">
+      <a class="btn secondary" href="{{ back_url }}">Back</a>
+      {% if csv_path == "nfl" %}
+        <a class="btn secondary" href="{{ url_for('download', sport=csv_path) }}">Download CSV</a>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="card-b">
+    {% if not lineups or lineups|length == 0 %}
+      <div class="footer-note">No lineups to display.</div>
+    {% else %}
+      <div style="display:grid; gap:14px;">
+        {% for l in lineups %}
+          <div class="lineup-card">
+            <div class="lineup-h">
+              <div class="left">
+                <div class="lineup-title">Lineup #{{ loop.index }}</div>
+                <div class="lineup-meta">
+                  <span class="badge good">Salary <span class="mono">${{ "{:,}".format(l.total_salary) }}</span></span>
+                  <span class="badge good">Proj <span class="mono">{{ "%.2f"|format(l.total_proj) }}</span></span>
+                  {% if l.meta and l.meta.template %}
+                    <span class="badge blue">Template <span class="mono">{{ l.meta.template }}</span></span>
+                  {% endif %}
+                  {% if l.meta and l.meta.stack %}
+                    <span class="badge">Stack <span class="mono">{{ l.meta.stack }}</span></span>
+                  {% endif %}
+                </div>
+              </div>
+            </div>
+
+            <div style="padding:14px;">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th style="width:84px;">POS</th>
+                    <th>Player</th>
+                    <th style="width:84px;">Team</th>
+                    <th style="width:120px;">Salary</th>
+                    <th style="width:160px;">Projected</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for r in l.rows %}
+                    <tr>
+                      <td class="mono"><strong>{{ r.pos }}</strong></td>
+                      <td>{{ r.player }}</td>
+                      <td class="mono">{{ r.team }}</td>
+                      <td class="mono">${{ "{:,}".format(r.salary) }}</td>
+                      <td class="mono">{{ "%.2f"|format(r.proj) }}</td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+    {% endif %}
+  </div>
+</div>
+
+{% endblock %}

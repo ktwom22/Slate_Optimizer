@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="grid two">
+  <div class="card">
+    <div class="card-h">
+      <h1>Welcome</h1>
+      <p>Run your local NFL/NBA generators and view lineups in a DraftKings-style format.</p>
+    </div>
+    <div class="card-b">
+      <div style="display:flex; gap:10px; flex-wrap:wrap;">
+        <a class="btn secondary" href="{{ url_for('nfl') }}">Open NFL Generator</a>
+        <a class="btn secondary" href="{{ url_for('nba') }}">Open NBA Generator</a>
+      </div>
+
+      <div class="footer-note">
+        Tip: If a run times out, reduce number of lineups or loosen constraints (min salary / uniqueness / randomness).
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-h">
+      <h2>How the inputs work</h2>
+      <p>Quick definitions to match DK optimizer behavior.</p>
+    </div>
+    <div class="card-b">
+      <div class="badge blue">Min Unique</div>
+      <p class="footer-note" style="margin-top:8px;">
+        Minimum number of players that must be different between any two lineups. Higher = more variety, but can reduce feasibility.
+      </p>
+
+      <div style="height:10px;"></div>
+
+      <div class="badge blue">Randomness</div>
+      <p class="footer-note" style="margin-top:8px;">
+        Adds a small random boost/penalty to projections so lineups aren’t identical. Higher = more lineup diversity, but slightly less “pure optimal.”
+      </p>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
