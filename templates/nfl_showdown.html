@@ -1,0 +1,149 @@
+{% extends "base.html" %}
+{% block content %}
+
+<!-- SEO Metadata (best practice: move <title>/<meta> into base.html <head> via blocks) -->
+<title>NFL DraftKings Showdown Optimizer | CPT + FLEX Lineups</title>
+<meta name="description" content="Generate optimized NFL DraftKings Showdown lineups with CPT salary/points 1.5x, lineup uniqueness, randomness, and exposure caps for better DFS diversity.">
+<meta name="keywords" content="NFL showdown optimizer, DraftKings showdown lineup builder, CPT 1.5x, DFS showdown, single game DFS, lineup diversity, exposure cap">
+
+<div class="grid two">
+
+  <!-- Showdown Generator Form -->
+  <div class="card">
+    <div class="card-h">
+      <h1>NFL Showdown Lineup Generator</h1>
+      <p>Build DraftKings Showdown lineups with CPT (1.5x salary + points), uniqueness, randomness, and exposure caps for more diverse builds.</p>
+    </div>
+
+    <div class="card-b">
+      <form class="form" method="POST">
+        <div class="row2">
+          <div>
+            <label>
+              Number of Lineups
+              <span class="hint">How many showdown lineups you want to generate</span>
+            </label>
+            <input name="num_lineups" type="number" min="1" max="150" value="20"
+                   title="Enter the number of NFL Showdown lineups to generate" />
+          </div>
+
+          <div>
+            <label>
+              Minimum Salary Spend
+              <span class="hint">Minimum total salary for CPT+FLEX lineup</span>
+            </label>
+            <input name="min_salary" type="number" min="0" max="50000" value="48500"
+                   title="Enter the minimum total salary spend for your Showdown lineup" />
+          </div>
+        </div>
+
+        <div class="row2">
+          <div>
+            <label>
+              Minimum Unique Players
+              <span class="info"
+                    data-tip="Minimum number of different players between any two lineups (CPT counts as a player). Higher = more diversity, sometimes less feasible.">
+                i
+              </span>
+            </label>
+            <input name="min_unique" type="number" min="0" max="5" value="2"
+                   title="Set the minimum number of unique players between Showdown lineups" />
+          </div>
+
+          <div>
+            <label>
+              Randomness
+              <span class="info"
+                    data-tip="Adds small randomness to projections to create variety. Higher values create more diversity but slightly less optimal lineups. Suggested: 0.8–1.6">
+                i
+              </span>
+            </label>
+            <input name="randomness" type="number" step="0.1" min="0" max="3" value="1.2"
+                   title="Add randomness to player projections to vary lineups" />
+          </div>
+        </div>
+
+        <div class="row2">
+          <div>
+            <label>
+              Max Player Exposure
+              <span class="info"
+                    data-tip="Hard cap for how often any player can appear across all lineups (0.50 = 50%). Lower = more diversity, can reduce feasibility. Suggested: 0.35–0.60">
+                i
+              </span>
+            </label>
+            <input name="max_player_exposure" type="number" step="0.01" min="0.10" max="1.00" value="0.50"
+                   title="Set maximum player exposure across lineups" />
+          </div>
+
+          <div>
+            <label>
+              Soft Exposure Penalty (Optional)
+              <span class="info"
+                    data-tip="Softly discourages overused players without banning them (0 disables). Suggested: 4–8 for more variety.">
+                i
+              </span>
+            </label>
+            <input name="soft_exposure_penalty" type="number" step="0.5" min="0" max="20" value="0"
+                   title="Optional soft penalty to reduce repeated players" />
+          </div>
+        </div>
+
+        <div class="row2">
+          <div>
+            <label>
+              Max Players Per Team
+              <span class="info"
+                    data-tip="Limit total players from one team (CPT+FLEX). Default 5 is basically off; try 4 for more balance.">
+                i
+              </span>
+            </label>
+            <input name="max_players_per_team" type="number" min="3" max="5" value="5"
+                   title="Limit the number of players from one team in a lineup" />
+          </div>
+
+          <div>
+            <label>
+              Salary Cap
+              <span class="hint">Showdown cap is typically 50,000</span>
+            </label>
+            <input name="salary_cap" type="number" min="0" max="50000" value="50000"
+                   title="Set the salary cap for Showdown lineups" />
+          </div>
+        </div>
+
+        <button class="btn" type="submit" title="Generate your NFL Showdown lineups">Generate Showdown Lineups</button>
+
+        <div class="footer-note">
+          🏈 <strong>Showdown Tip:</strong> If generation fails, lower <em>Min Salary</em>, reduce <em>Min Unique</em>, or raise <em>Max Player Exposure</em>.
+          CPT counts as a player and uses <strong>1.5x salary + 1.5x points</strong>.
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Notes / Output Help -->
+  <div class="card">
+    <div class="card-h">
+      <h2>How Results Appear</h2>
+      <p>After generation, you’ll see:</p>
+    </div>
+    <div class="card-b">
+      <ul style="margin:0; padding-left:18px; color:var(--muted); font-size:13px;">
+        <li><strong>CPT</strong> row shows 1.5x salary + 1.5x projection</li>
+        <li>Five <strong>FLEX</strong> players listed normally</li>
+        <li>Lineup header shows <strong>Total Salary</strong> and <strong>Total Projected Points</strong></li>
+        <li>Team distribution shown like: <code>KC:4; SF:2</code></li>
+        <li>If diversity settings are strict, fewer lineups may be returned</li>
+      </ul>
+
+      <div style="margin-top:10px; color:var(--muted); font-size:13px;">
+        <strong>File:</strong> <code>nfl_showdown.py</code><br>
+        Make sure your Flask route calls: <code>generate_nfl_showdown_df(...)</code>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+{% endblock %}

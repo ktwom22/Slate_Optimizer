@@ -5,6 +5,7 @@ from flask import Flask, render_template, request, redirect, url_for, flash
 
 import NFL
 import NBA
+import nfl_showdown  # ✅ your new file: nfl_showdown.py
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "local-dev")
@@ -78,18 +79,16 @@ def df_to_lineups(df: pd.DataFrame, slots: list[str], meta_fields: dict[str, str
             total_salary += sal
             total_proj += proj
 
-            # Track the team usage (for stacks)
             if team:
                 team_usage[team] = team_usage.get(team, 0) + 1
 
-        # Convert team usage to a stack template (e.g., "3-2-1")
+        # Stack template (simple team-count signature)
         stack_template = "-".join(str(count) for count in sorted(team_usage.values(), reverse=True))
 
         meta = {}
         for k, col in meta_fields.items():
             meta[k] = str(row.get(col, "")) if col in df.columns else ""
 
-        # Add team stack info to meta fields
         meta["stack_template"] = stack_template
         meta["team_usage"] = team_usage
 
@@ -101,6 +100,7 @@ def df_to_lineups(df: pd.DataFrame, slots: list[str], meta_fields: dict[str, str
         })
 
     return lineups
+
 
 def _error(where: str, e: Exception, back_endpoint: str):
     print(f"\n=== ERROR in {where} ===")
@@ -145,6 +145,58 @@ def nfl():
 
     except Exception as e:
         return _error("NFL /nfl", e, "nfl")
+
+
+@app.route("/nfl-showdown", methods=["GET", "POST"])
+def nfl_showdown_route():
+    if request.method == "GET":
+        # ✅ uses your template: templates/nfl_showdown.html
+        return render_template("nfl_showdown.html", title="NFL DK Showdown")
+
+    try:
+        # Match the form names from nfl_showdown.html
+        num_lineups = max(1, min(_safe_int(request.form.get("num_lineups", "20"), 20), 150))
+        min_unique = max(0, min(_safe_int(request.form.get("min_unique", "2"), 2), 5))
+        min_salary = max(0, _safe_int(request.form.get("min_salary", "48500"), 48500))
+        randomness = max(0.0, min(_safe_float(request.form.get("randomness", "1.2"), 1.2), 3.0))
+        salary_cap = max(0, min(_safe_int(request.form.get("salary_cap", "50000"), 50000), 50000))
+
+        max_player_exposure = _safe_float(request.form.get("max_player_exposure", "0.50"), 0.50)
+        max_player_exposure = max(0.10, min(max_player_exposure, 1.00))
+
+        soft_exposure_penalty = _safe_float(request.form.get("soft_exposure_penalty", "0"), 0.0)
+        soft_exposure_penalty = max(0.0, min(soft_exposure_penalty, 50.0))
+
+        max_players_per_team = _safe_int(request.form.get("max_players_per_team", "5"), 5)
+        max_players_per_team = max(3, min(max_players_per_team, 5))
+
+        gen = _require_fn(nfl_showdown, "generate_nfl_showdown_df")
+
+        df = gen(
+            num_lineups=num_lineups,
+            min_unique=min_unique,
+            min_salary_spend=min_salary,
+            randomness=randomness,
+            salary_cap=salary_cap,
+            max_player_exposure=max_player_exposure,
+            soft_exposure_penalty=soft_exposure_penalty,
+            max_players_per_team=max_players_per_team,
+        ).head(num_lineups)
+
+        # Showdown slots must match the DF columns created by nfl_showdown.py
+        slots = ["CPT", "FLEX1", "FLEX2", "FLEX3", "FLEX4", "FLEX5"]
+        meta_fields = {"teams": "team_counts"}  # optional if your DF includes it
+        lineups = df_to_lineups(df, slots, meta_fields)
+
+        return render_template(
+            "results.html",
+            title="NFL Showdown Lineups",
+            lineups=lineups,
+            back_url=url_for("nfl_showdown_route")
+        )
+
+    except Exception as e:
+        return _error("NFL Showdown /nfl-showdown", e, "nfl_showdown_route")
 
 
 @app.route("/nba", methods=["GET", "POST"])

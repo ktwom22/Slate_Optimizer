@@ -2,26 +2,24 @@
 <html lang="en">
 <head>
   <!-- Google tag (gtag.js) -->
-<script async src="https://www.googletagmanager.com/gtag/js?id=G-N3YLG2BTHY"></script>
-<script>
-  window.dataLayer = window.dataLayer || [];
-  function gtag(){dataLayer.push(arguments);}
-  gtag('js', new Date());
-
-  gtag('config', 'G-N3YLG2BTHY');
-</script>
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-N3YLG2BTHY"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', 'G-N3YLG2BTHY');
+  </script>
 
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
 
-  <!-- Title with Dynamic Page-Specific Content -->
-  <title>{{ title or "DraftKings Lineup Optimizer | NFL & NBA DFS" }}</title>
+  <!-- ✅ Allow child templates to override title + meta -->
+  <title>{% block title %}{{ title or "DraftKings Lineup Optimizer | NFL & NBA DFS" }}{% endblock %}</title>
 
-  <!-- Meta Description -->
+  {% block meta %}
   <meta name="description" content="Optimize your NFL and NBA lineups with this DFS tool. Create winning DraftKings-style lineups with stacking strategies, salary constraints, and lineup diversity.">
-
-  <!-- Meta Keywords -->
   <meta name="keywords" content="DraftKings lineup optimizer, DFS tool, NFL optimizer, NBA optimizer, DFS stacking strategies, fantasy sports, lineup builder, winning DFS strategy">
+  {% endblock %}
 
   <!-- Canonical URL -->
   <link rel="canonical" href="{{ request.url }}" />
@@ -114,17 +112,25 @@
     }
   </style>
 </head>
+
 <body>
   <div class="container">
     <!-- Top Bar -->
     <div class="topbar">
       <div class="brand">
         <div class="title">DK Lineup Studio</div>
-        <div class="subtitle">Local optimizer runner · NFL + NBA</div>
+        <div class="subtitle">Local optimizer runner · NFL + NBA + Showdown</div>
       </div>
+
       <div class="nav">
         <a class="pill {% if request.path=='/' %}active{% endif %}" href="{{ url_for('index') }}">Home</a>
-        <a class="pill {% if request.path.startswith('/nfl') %}active{% endif %}" href="{{ url_for('nfl') }}">NFL</a>
+
+        <a class="pill {% if request.path=='/nfl' %}active{% endif %}" href="{{ url_for('nfl') }}">NFL</a>
+
+        <!-- ✅ Showdown link (new route name from app.py: nfl_showdown_route) -->
+        <a class="pill {% if request.path.startswith('/nfl-showdown') %}active{% endif %}"
+           href="{{ url_for('nfl_showdown_route') }}">NFL Showdown</a>
+
         <a class="pill {% if request.path.startswith('/nba') %}active{% endif %}" href="{{ url_for('nba') }}">NBA</a>
       </div>
     </div>
@@ -136,14 +142,14 @@
       {% endif %}
     {% endwith %}
 
-    <!-- SEO Content -->
+    <!-- Page Content -->
     {% block content %}{% endblock %}
   </div>
 
   <!-- Footer -->
   <footer style="text-align:center; margin-top:25px; color:var(--muted); font-size:12px;">
     <p>&copy; 2025 DK Lineup Studio. All rights reserved.</p>
-    <p>Optimized for NFL and NBA DraftKings DFS creators.</p>
+    <p>Optimized for NFL, NFL Showdown, and NBA DraftKings DFS creators.</p>
   </footer>
 </body>
 </html>

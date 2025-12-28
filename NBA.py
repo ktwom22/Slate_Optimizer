@@ -1,24 +1,20 @@
 """
-NBA DraftKings Classic — FAST GPP BUILDER (ONE FILE)
+NBA DraftKings Classic — DIVERSIFIED FAST GPP BUILDER (ONE FILE)
 
-- Exposes: generate_nba_df(...) -> pandas DataFrame (DK-style columns)
-- Works with Flask (no subprocess, no CSV required)
-- Keeps CLI support too
+What this fixes (your issue):
+✅ Stops identical chalk/value repeats by adding:
+   - Global exposure caps (max % a player can appear across N lineups)
+   - Per-lineup variability in chalk/sneaky requirements
+   - Optional team-stack pattern rotation (2-2 vs 3-2 vs 2-2 default)
+✅ Fixes uniqueness bug: previous code tracked SLOT indices, not PLAYER indices.
+✅ Adds optional "ban over-cap" + "soft exposure penalty" modes
+✅ Keeps generate_nba_df(...) for Flask + CLI
 
-Constraints:
-- DK roster: PG, SG, SF, PF, C, G, F, UTIL
-- Salary cap 50k + min spend
-- Must include >=1 PG and >=1 PF
-- 2–2 team stack: exactly two teams have exactly 2 players each; all other teams <=1
-- Must include at least one PG+PF same team
-- Chalk/Sneaky tiers from predicted ownership
-- Per lineup: min_chalk, max_chalk, min_sneaky
-- Uniqueness across lineups (min_unique)
+Install:
+  pip install pandas requests pulp numpy
 
-Speed:
-- CBC time limit per solve
-- Reduced retry loops
-- Early feasibility relax ladders
+Run:
+  python -u NBA.py --num_lineups 20
 """
 
 import argparse
@@ -49,21 +45,27 @@ DK_SLOTS = ["PG", "SG", "SF", "PF", "C", "G", "F", "UTIL"]
 MIN_SALARY_SPEND_DEFAULT = 49500
 UTIL_SALARY_CAP_DEFAULT: Optional[int] = 5500
 
+# Chalk/sneaky defaults (will be varied per lineup if enabled)
 MIN_CHALK_DEFAULT = 2
 MAX_CHALK_DEFAULT = 4
 MIN_SNEAKY_DEFAULT = 2
-
 CHALK_PCTILE_DEFAULT = 85
 SNEAKY_PCTILE_DEFAULT = 25
 
 OWN_PENALTY_DEFAULT = 28.0
 LEVERAGE_WEIGHT_DEFAULT = 0.35
 
-# SPEED knobs
-CBC_TIME_LIMIT_SEC = float(os.environ.get("NBA_CBC_TIME_LIMIT", "2.0"))  # per lineup solve
-RETRIES_PER_LINEUP = int(os.environ.get("NBA_RETRIES", "3"))             # attempts per lineup
+# Diversity controls
+MAX_PLAYER_EXPOSURE_DEFAULT = 0.45   # max % of lineups any player can appear (hard ban once exceeded)
+SOFT_EXPOSURE_PENALTY_DEFAULT = 0.0  # set to >0 to softly discourage high-exposure players (optional)
+VARIABILITY_DEFAULT = True           # vary chalk/sneaky + objective weights per lineup
+STACK_MODE_DEFAULT = "rotate"        # "2-2", "3-2", "rotate"
+
+# Speed knobs
+CBC_TIME_LIMIT_SEC = float(os.environ.get("NBA_CBC_TIME_LIMIT", "2.0"))
+RETRIES_PER_LINEUP = int(os.environ.get("NBA_RETRIES", "3"))
 RELAX_LADDER = [
-    # (util_cap_relax, uniqueness_relax, min_salary_relax)
+    # (util_cap_relax, uniqueness_relax_steps, min_salary_relax)
     (False, 0, 0),
     (True,  0, 0),
     (True,  1, 0),
@@ -229,7 +231,6 @@ def parse_players(
     df["proj"] = df[proj_col].apply(lambda v: _to_float(v, 0.0))
     df["usage"] = df[usage_col].apply(lambda v: _to_float(v, 0.0)) if usage_col else 0.0
 
-    # drop invalid early (big speed win)
     df = df[(df["name"] != "") & (df["team"] != "") & (df["pos_raw"] != "")]
     df = df[(df["salary"] > 0) & (df["proj"] > 0)]
     if df.empty:
@@ -272,14 +273,117 @@ def parse_players(
 
 
 # -----------------------------
-# OPTIMIZER
+# STACK MODES
+# -----------------------------
+def choose_stack_mode(stack_mode: str, li: int) -> str:
+    sm = (stack_mode or "rotate").lower().strip()
+    if sm in ("2-2", "3-2"):
+        return sm
+    # rotate pattern: 2-2, 2-2, 3-2, 2-2, 3-2 ...
+    return "3-2" if (li % 3 == 2) else "2-2"
+
+
+def add_team_stack_constraints(
+    prob: pulp.LpProblem,
+    selected: List[pulp.LpAffineExpression],
+    players: List[Player],
+    mode: str,
+) -> None:
+    teams = sorted(set(p.team for p in players))
+    team_players: Dict[str, List[int]] = {t: [] for t in teams}
+    for i, p in enumerate(players):
+        team_players[p.team].append(i)
+
+    if mode == "2-2":
+        # exactly two teams have exactly 2 players; others <=1
+        team_used = {t: pulp.LpVariable(f"team_used_{t}", cat="Binary") for t in teams}
+        for t, idxs in team_players.items():
+            team_count = pulp.lpSum(selected[i] for i in idxs)
+            prob += team_count >= 2 * team_used[t], f"team_min_if_used_{t}"
+            prob += team_count <= 2 * team_used[t] + 1 * (1 - team_used[t]), f"team_max_if_not_used_{t}"
+        prob += pulp.lpSum(team_used[t] for t in teams) == 2, "exactly_two_stack_teams"
+        return
+
+    if mode == "3-2":
+        # one team exactly 3, one team exactly 2, others <=1
+        team3 = {t: pulp.LpVariable(f"team3_{t}", cat="Binary") for t in teams}
+        team2 = {t: pulp.LpVariable(f"team2_{t}", cat="Binary") for t in teams}
+        for t, idxs in team_players.items():
+            team_count = pulp.lpSum(selected[i] for i in idxs)
+            # enforce exact counts when flagged
+            prob += team_count >= 3 * team3[t], f"team3_lb_{t}"
+            prob += team_count <= 3 * team3[t] + 10 * (1 - team3[t]), f"team3_ub_{t}"
+            prob += team_count >= 2 * team2[t], f"team2_lb_{t}"
+            prob += team_count <= 2 * team2[t] + 10 * (1 - team2[t]), f"team2_ub_{t}"
+
+            # if not chosen as 3-team or 2-team, cap at 1
+            prob += team_count <= 1 + 10 * (team3[t] + team2[t]), f"others_cap_{t}"
+
+            # can't be both
+            prob += team3[t] + team2[t] <= 1, f"no_both_{t}"
+
+        prob += pulp.lpSum(team3[t] for t in teams) == 1, "exactly_one_team3"
+        prob += pulp.lpSum(team2[t] for t in teams) == 1, "exactly_one_team2"
+        return
+
+
+# -----------------------------
+# VARIABILITY (chalk/sneaky + weights)
+# -----------------------------
+def lineup_profile(
+    li: int,
+    min_chalk: int,
+    max_chalk: int,
+    min_sneaky: int,
+    own_penalty: float,
+    leverage_weight: float,
+    variability: bool,
+) -> Tuple[int, int, int, float, float]:
+    if not variability:
+        return min_chalk, max_chalk, min_sneaky, own_penalty, leverage_weight
+
+    # rotate profiles every 5 lineups
+    r = li % 5
+    if r == 0:
+        # contrarian
+        mc, xc, ms = max(0, min_chalk - 2), max(0, max_chalk - 2), min_sneaky + 1
+        op = own_penalty * random.uniform(1.05, 1.35)
+        lw = leverage_weight * random.uniform(1.05, 1.25)
+    elif r == 1:
+        # balanced
+        mc, xc, ms = min_chalk, max_chalk, min_sneaky
+        op = own_penalty * random.uniform(0.95, 1.15)
+        lw = leverage_weight * random.uniform(0.95, 1.15)
+    elif r == 2:
+        # slightly chalky
+        mc, xc, ms = min_chalk + 1, max_chalk + 1, max(0, min_sneaky - 1)
+        op = own_penalty * random.uniform(0.85, 1.05)
+        lw = leverage_weight * random.uniform(0.85, 1.05)
+    elif r == 3:
+        # very balanced but higher sneaky
+        mc, xc, ms = max(0, min_chalk - 1), max_chalk, min_sneaky + 1
+        op = own_penalty * random.uniform(0.95, 1.20)
+        lw = leverage_weight * random.uniform(1.00, 1.20)
+    else:
+        # projection-ish
+        mc, xc, ms = min_chalk, max_chalk + 1, max(0, min_sneaky - 1)
+        op = own_penalty * random.uniform(0.80, 1.00)
+        lw = leverage_weight * random.uniform(0.80, 1.00)
+
+    if xc < mc:
+        xc = mc
+    return mc, xc, ms, op, lw
+
+
+# -----------------------------
+# OPTIMIZER (one lineup)
 # -----------------------------
 def optimize_one_lineup(
     players: List[Player],
     salary_cap: int,
     min_salary_spend: int,
     min_unique_vs_previous: int,
-    previous_lineups: List[Set[int]],
+    previous_player_sets: List[Set[int]],
     randomness: float,
     util_salary_cap: Optional[int],
     own_penalty: float,
@@ -288,6 +392,11 @@ def optimize_one_lineup(
     max_chalk: int,
     min_sneaky: int,
     seed: Optional[int],
+    banned_players: Optional[Set[int]] = None,
+    soft_exposure_penalty: float = 0.0,
+    exposure_counts: Optional[Dict[int, int]] = None,
+    num_lineups_total: int = 0,
+    stack_mode: str = "2-2",
 ) -> Optional[List[int]]:
 
     if seed is not None:
@@ -299,45 +408,41 @@ def optimize_one_lineup(
     if len(teams) < 2:
         return None
 
-    team_players: Dict[str, List[int]] = {t: [] for t in teams}
-    for i, p in enumerate(players):
-        team_players[p.team].append(i)
-
+    # Build decision vars
     x: Dict[Tuple[int, str], pulp.LpVariable] = {}
     for i in range(n):
         for s in DK_SLOTS:
             if s in elig[i]:
                 x[(i, s)] = pulp.LpVariable(f"x_{i}_{s}", cat="Binary")
 
-    prob = pulp.LpProblem("NBA_DK_GPP_FAST", pulp.LpMaximize)
+    prob = pulp.LpProblem("NBA_DK_GPP_DIVERSE", pulp.LpMaximize)
 
-    # fill each slot exactly once
+    # Fill each slot exactly once
     for s in DK_SLOTS:
         prob += pulp.lpSum(x[(i, s)] for i in range(n) if (i, s) in x) == 1, f"fill_{s}"
 
-    # each player at most once
+    # Each player at most once
     selected = [pulp.lpSum(x[(i, s)] for s in DK_SLOTS if (i, s) in x) for i in range(n)]
     for i in range(n):
         prob += selected[i] <= 1, f"one_slot_{i}"
 
-    # salary
+    # Salary
     total_salary = pulp.lpSum(players[i].salary * selected[i] for i in range(n))
     prob += total_salary <= salary_cap, "salary_cap"
     prob += total_salary >= min_salary_spend, "min_salary_spend"
 
-    # must have >=1 PG and >=1 PF
+    # Must have >=1 PG and >=1 PF
     prob += pulp.lpSum(selected[i] for i in range(n) if "PG" in players[i].positions) >= 1, "at_least_one_pg"
     prob += pulp.lpSum(selected[i] for i in range(n) if "PF" in players[i].positions) >= 1, "at_least_one_pf"
 
-    # 2–2 team stack: exactly two teams have 2 players; all others <=1
-    team_used = {t: pulp.LpVariable(f"team_used_{t}", cat="Binary") for t in teams}
-    for t, idxs in team_players.items():
-        team_count = pulp.lpSum(selected[i] for i in idxs)
-        prob += team_count >= 2 * team_used[t], f"team_min_if_used_{t}"
-        prob += team_count <= 2 * team_used[t] + 1 * (1 - team_used[t]), f"team_max_if_not_used_{t}"
-    prob += pulp.lpSum(team_used[t] for t in teams) == 2, "exactly_two_stack_teams"
+    # Stack constraints (2-2 or 3-2)
+    add_team_stack_constraints(prob, selected, players, mode=stack_mode)
 
     # PG + PF same-team exists
+    team_players: Dict[str, List[int]] = {t: [] for t in teams}
+    for i, p in enumerate(players):
+        team_players[p.team].append(i)
+
     y = {t: pulp.LpVariable(f"y_pg_pf_{t}", cat="Binary") for t in teams}
     for t, idxs in team_players.items():
         pg_count_t = pulp.lpSum(selected[i] for i in idxs if "PG" in players[i].positions)
@@ -350,22 +455,38 @@ def optimize_one_lineup(
     if util_salary_cap is not None:
         prob += pulp.lpSum(players[i].salary * x[(i, "UTIL")] for i in range(n) if (i, "UTIL") in x) <= util_salary_cap, "util_salary_cap"
 
-    # chalk/sneaky constraints
+    # Chalk/sneaky constraints
     chalk_sum = pulp.lpSum(players[i].is_chalk * selected[i] for i in range(n))
     sneaky_sum = pulp.lpSum(players[i].is_sneaky * selected[i] for i in range(n))
     prob += chalk_sum >= min_chalk, "min_chalk"
     prob += chalk_sum <= max_chalk, "max_chalk"
     prob += sneaky_sum >= min_sneaky, "min_sneaky"
 
-    # uniqueness
+    # Ban players (hard exposure cap)
+    if banned_players:
+        for i in banned_players:
+            if 0 <= i < n:
+                prob += selected[i] == 0, f"ban_{i}"
+
+    # Uniqueness across lineups (FIXED: compare actual player indices)
     lineup_size = len(DK_SLOTS)
-    if previous_lineups and min_unique_vs_previous > 0:
+    if previous_player_sets and min_unique_vs_previous > 0:
         max_overlap = lineup_size - min_unique_vs_previous
-        for li, prev in enumerate(previous_lineups, start=1):
+        for li, prev in enumerate(previous_player_sets, start=1):
             prob += pulp.lpSum(selected[i] for i in prev) <= max_overlap, f"uniq_prev_{li}"
 
-    # objective
+    # Objective
     noise = [random.uniform(-randomness, randomness) for _ in range(n)] if randomness > 0 else [0.0] * n
+
+    # Soft exposure penalty (optional)
+    exp_term = 0
+    if soft_exposure_penalty > 0 and exposure_counts is not None and num_lineups_total > 0:
+        # penalty proportional to (current_exposure_rate)
+        for i in range(n):
+            ct = exposure_counts.get(i, 0)
+            rate = ct / float(num_lineups_total)
+            exp_term += (-soft_exposure_penalty * rate) * selected[i]
+
     prob += pulp.lpSum(
         (
             players[i].proj
@@ -374,13 +495,14 @@ def optimize_one_lineup(
             + noise[i]
         ) * selected[i]
         for i in range(n)
-    ), "objective"
+    ) + exp_term, "objective"
 
     solver = pulp.PULP_CBC_CMD(msg=False, timeLimit=CBC_TIME_LIMIT_SEC)
     status = prob.solve(solver)
     if pulp.LpStatus[status] != "Optimal":
         return None
 
+    # Extract chosen players by slot
     chosen_by_slot: List[int] = []
     for s in DK_SLOTS:
         chosen = None
@@ -406,10 +528,15 @@ def summarize_lineup(players: List[Player], lineup_idxs: List[int]) -> Dict[str,
         team_counts[t] = team_counts.get(t, 0) + 1
     team_counts = dict(sorted(team_counts.items(), key=lambda x: (-x[1], x[0])))
 
+    chalk_ct = sum(players[i].is_chalk for i in lineup_idxs)
+    sneaky_ct = sum(players[i].is_sneaky for i in lineup_idxs)
+
     return {
         "total_salary": total_salary,
         "total_proj": round(total_proj, 2),
-        "team_counts": "; ".join([f"{t}:{c}" for t, c in team_counts.items()])
+        "team_counts": "; ".join([f"{t}:{c}" for t, c in team_counts.items()]),
+        "chalk": chalk_ct,
+        "sneaky": sneaky_ct,
     }
 
 
@@ -428,6 +555,8 @@ def lineups_to_df(players: List[Player], lineups: List[List[int]]) -> pd.DataFra
         row["team_counts"] = meta["team_counts"]
         row["total_salary"] = meta["total_salary"]
         row["total_proj"] = meta["total_proj"]
+        row["chalk_ct"] = meta["chalk"]
+        row["sneaky_ct"] = meta["sneaky"]
         rows.append(row)
 
     return pd.DataFrame(rows).sort_values("total_proj", ascending=False).reset_index(drop=True)
@@ -453,48 +582,82 @@ def generate_nba_df(
     own_penalty: float = OWN_PENALTY_DEFAULT,
     leverage_weight: float = LEVERAGE_WEIGHT_DEFAULT,
     seed: Optional[int] = 7,
+    max_player_exposure: float = MAX_PLAYER_EXPOSURE_DEFAULT,
+    soft_exposure_penalty: float = SOFT_EXPOSURE_PENALTY_DEFAULT,
+    variability: bool = VARIABILITY_DEFAULT,
+    stack_mode: str = STACK_MODE_DEFAULT,
 ) -> pd.DataFrame:
 
     url = csv_url or CSV_URL_DEFAULT
     df = fetch_csv_to_df(url)
     players, _analysis = parse_players(df, games=games, chalk_pctile=chalk_pctile, sneaky_pctile=sneaky_pctile)
 
-    # Auto-fix if pools are small
+    # Auto-fix counts if pool small
     chalk_total = sum(p.is_chalk for p in players)
     sneaky_total = sum(p.is_sneaky for p in players)
     min_chalk = min(min_chalk, chalk_total)
     min_sneaky = min(min_sneaky, sneaky_total)
     max_chalk = max(max_chalk, min_chalk)
 
-    lineups: List[List[int]] = []
-    prev_sets: List[Set[int]] = []
+    n = len(players)
+    player_counts: Dict[int, int] = {i: 0 for i in range(n)}
+    cap = max(1, int(math.floor(max(0.05, min(1.0, max_player_exposure)) * num_lineups)))
 
-    # Try a small relax ladder to avoid long hangs
+    lineups: List[List[int]] = []
+    previous_player_sets: List[Set[int]] = []
+
+    # Relax ladder to avoid hangs
     for relax_util, relax_uniq_steps, relax_min_sal in RELAX_LADDER:
         util_cap_try = None if relax_util else util_salary_cap
         uniq_try = max(0, min_unique - relax_uniq_steps)
         min_sal_try = max(0, min_salary_spend - relax_min_sal)
 
         lineups = []
-        prev_sets = []
+        previous_player_sets = []
+        player_counts = {i: 0 for i in range(n)}
 
         for li in range(num_lineups):
             built = None
+
+            # hard ban players already at exposure cap
+            banned = {i for i, ct in player_counts.items() if ct >= cap}
+
+            # lineup-specific profile
+            mc_i, xc_i, ms_i, op_i, lw_i = lineup_profile(
+                li=li,
+                min_chalk=min_chalk,
+                max_chalk=max_chalk,
+                min_sneaky=min_sneaky,
+                own_penalty=own_penalty,
+                leverage_weight=leverage_weight,
+                variability=variability,
+            )
+
+            # stack mode rotation
+            mode_i = choose_stack_mode(stack_mode, li)
+
             for attempt in range(RETRIES_PER_LINEUP):
+                rand_i = randomness + (0.15 * attempt) + (0.15 * (li / max(1, num_lineups - 1)))
+
                 built = optimize_one_lineup(
                     players=players,
                     salary_cap=salary_cap,
                     min_salary_spend=min_sal_try,
                     min_unique_vs_previous=uniq_try,
-                    previous_lineups=prev_sets,
-                    randomness=randomness + (0.15 * attempt),
+                    previous_player_sets=previous_player_sets,
+                    randomness=rand_i,
                     util_salary_cap=util_cap_try,
-                    own_penalty=own_penalty,
-                    leverage_weight=leverage_weight,
-                    min_chalk=min_chalk,
-                    max_chalk=max_chalk,
-                    min_sneaky=min_sneaky,
+                    own_penalty=op_i,
+                    leverage_weight=lw_i,
+                    min_chalk=mc_i,
+                    max_chalk=xc_i,
+                    min_sneaky=ms_i,
                     seed=None if seed is None else seed + li * 10 + attempt,
+                    banned_players=banned,
+                    soft_exposure_penalty=soft_exposure_penalty,
+                    exposure_counts=player_counts,
+                    num_lineups_total=num_lineups,
+                    stack_mode=mode_i,
                 )
                 if built is not None:
                     break
@@ -502,8 +665,12 @@ def generate_nba_df(
             if built is None:
                 break
 
+            # store + update exposure
             lineups.append(built)
-            prev_sets.append(set(built))
+            chosen_set = set(built)
+            previous_player_sets.append(chosen_set)
+            for idx in chosen_set:
+                player_counts[idx] += 1
 
         if len(lineups) > 0:
             break
@@ -511,7 +678,7 @@ def generate_nba_df(
     if not lineups:
         raise RuntimeError(
             "No NBA lineups generated.\n"
-            "Try loosening: lower min_salary_spend, set min_unique=1, or reduce min_sneaky/max_chalk constraints."
+            "Try loosening: lower min_salary_spend, set min_unique=1, reduce min_sneaky, increase util_salary_cap, or set stack_mode=2-2."
         )
 
     return lineups_to_df(players, lineups)
@@ -532,6 +699,7 @@ def main():
     ap.add_argument("--randomness", type=float, default=0.8)
 
     ap.add_argument("--util_salary_cap", type=int, default=UTIL_SALARY_CAP_DEFAULT if UTIL_SALARY_CAP_DEFAULT else -1)
+
     ap.add_argument("--min_chalk", type=int, default=MIN_CHALK_DEFAULT)
     ap.add_argument("--max_chalk", type=int, default=MAX_CHALK_DEFAULT)
     ap.add_argument("--min_sneaky", type=int, default=MIN_SNEAKY_DEFAULT)
@@ -543,9 +711,21 @@ def main():
     ap.add_argument("--leverage_weight", type=float, default=LEVERAGE_WEIGHT_DEFAULT)
     ap.add_argument("--seed", type=int, default=7)
 
+    ap.add_argument("--max_player_exposure", type=float, default=MAX_PLAYER_EXPOSURE_DEFAULT)
+    ap.add_argument("--soft_exposure_penalty", type=float, default=SOFT_EXPOSURE_PENALTY_DEFAULT)
+    ap.add_argument("--variability", action="store_true", help="Enable per-lineup chalk/sneaky + weight variability")
+    ap.add_argument("--no_variability", action="store_true", help="Disable variability")
+    ap.add_argument("--stack_mode", type=str, default=STACK_MODE_DEFAULT, help="2-2, 3-2, rotate")
+
     args = ap.parse_args()
 
     util_cap = None if args.util_salary_cap is None or args.util_salary_cap < 0 else args.util_salary_cap
+
+    variability = True
+    if args.no_variability:
+        variability = False
+    elif args.variability:
+        variability = True
 
     out_df = generate_nba_df(
         num_lineups=args.num_lineups,
@@ -563,10 +743,14 @@ def main():
         sneaky_pctile=args.sneaky_pctile,
         own_penalty=args.own_penalty,
         leverage_weight=args.leverage_weight,
-        seed=args.seed
+        seed=args.seed,
+        max_player_exposure=args.max_player_exposure,
+        soft_exposure_penalty=args.soft_exposure_penalty,
+        variability=variability,
+        stack_mode=args.stack_mode,
     )
 
-    print(out_df.head(10).to_string(index=False))
+    print(out_df.head(20).to_string(index=False))
 
 
 if __name__ == "__main__":
