@@ -238,6 +238,7 @@ def eligible_slots(pos: str) -> Set[str]:
     return ELIG_MAP.get(pos.upper().strip(), set())
 
 
+
 # -----------------------------
 # PARSE PLAYERS
 # -----------------------------
@@ -945,4 +946,3 @@ def main():
 if __name__ == "__main__":
     start_watchdog()
     main()
-
