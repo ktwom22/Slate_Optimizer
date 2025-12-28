@@ -66,6 +66,7 @@ def df_to_lineups(df: pd.DataFrame, slots: list[str], meta_fields: dict[str, str
         rows = []
         total_salary = 0
         total_proj = 0.0
+        team_usage = {}
 
         for s in slots:
             pname = str(row.get(f"{s}_name", "") or "")
@@ -77,9 +78,20 @@ def df_to_lineups(df: pd.DataFrame, slots: list[str], meta_fields: dict[str, str
             total_salary += sal
             total_proj += proj
 
+            # Track the team usage (for stacks)
+            if team:
+                team_usage[team] = team_usage.get(team, 0) + 1
+
+        # Convert team usage to a stack template (e.g., "3-2-1")
+        stack_template = "-".join(str(count) for count in sorted(team_usage.values(), reverse=True))
+
         meta = {}
         for k, col in meta_fields.items():
             meta[k] = str(row.get(col, "")) if col in df.columns else ""
+
+        # Add team stack info to meta fields
+        meta["stack_template"] = stack_template
+        meta["team_usage"] = team_usage
 
         lineups.append({
             "rows": rows,
@@ -89,7 +101,6 @@ def df_to_lineups(df: pd.DataFrame, slots: list[str], meta_fields: dict[str, str
         })
 
     return lineups
-
 
 def _error(where: str, e: Exception, back_endpoint: str):
     print(f"\n=== ERROR in {where} ===")

@@ -1,68 +1,78 @@
 {% extends "base.html" %}
 {% block content %}
 
+<!-- SEO Metadata -->
+<title>NBA DraftKings Lineup Optimizer | Fantasy Basketball DFS Tool</title>
+<meta name="description" content="Generate optimized NBA lineups for DraftKings DFS contests. Customize minimum salary constraints, player uniqueness, and randomness to build winning basketball lineups.">
+<meta name="keywords" content="NBA lineup optimizer, DraftKings NBA, DFS optimizer, fantasy basketball generator, lineup optimization, NBA DFS strategy, lineup diversity">
+
+<!-- Main Content -->
 <div class="grid two">
+  <!-- NBA Generator Form -->
   <div class="card">
     <div class="card-h">
-      <h1>NBA Generator</h1>
-      <p>Run your NBA script and display lineups in a DK-style layout.</p>
+      <h1>NBA Lineup Generator</h1>
+      <p>Create competitive NBA DraftKings lineups using advanced optimization settings like salary constraints, randomness, and lineup diversity.</p>
     </div>
     <div class="card-b">
       <form class="form" method="POST">
         <div class="row2">
           <div>
             <label>
-              Number of lineups
-              <span class="hint">How many to generate</span>
+              Number of Lineups
+              <span class="hint">Set how many lineups to generate</span>
             </label>
-            <input name="num_lineups" type="number" min="1" max="150" value="20" />
+            <input name="num_lineups" type="number" min="1" max="150" value="20" title="Enter the total number of DraftKings lineups to generate" />
           </div>
 
           <div>
             <label>
-              Min salary spend
-              <span class="hint">Minimum total salary</span>
+              Minimum Salary Spend
+              <span class="hint">Set the minimum total salary for each DraftKings lineup</span>
             </label>
-            <input name="min_salary" type="number" min="0" max="50000" value="49000" />
+            <input name="min_salary" type="number" min="0" max="50000" value="49000" title="Set the minimum salary spend for each generated NBA lineup" />
           </div>
         </div>
 
         <div class="row2">
           <div>
             <label>
-              Min unique
-              <span class="info" data-tip="Minimum number of different players between lineups. Higher = more diversity but can make optimization harder.">i</span>
+              Minimum Unique Players
+              <span class="info" data-tip="The minimum number of unique players required between lineups. Higher values lead to lineup variety but can reduce feasibility.">i</span>
             </label>
-            <input name="min_unique" type="number" min="0" max="7" value="2" />
+            <input name="min_unique" type="number" min="0" max="7" value="2" title="Define the minimum number of unique players between lineups" />
           </div>
 
           <div>
             <label>
               Randomness
-              <span class="info" data-tip="Adds small noise to projections. Helps prevent identical lineups. Typical: 0.4–1.0">i</span>
+              <span class="info" data-tip="Adds random adjustments to player projections to increase lineup diversity. Recommended values range between 0.4 and 1.0.">i</span>
             </label>
-            <input name="randomness" type="number" step="0.1" min="0" max="3" value="0.8" />
+            <input name="randomness" type="number" step="0.1" min="0" max="3" value="0.8" title="Set randomness for generating diverse lineups" />
           </div>
         </div>
 
-        <button class="btn" type="submit">Generate NBA Lineups</button>
-        <div class="footer-note">NBA output is parsed from your script’s printed lineups.</div>
+        <button class="btn" type="submit" title="Generate your NBA DraftKings lineups">Generate NBA Lineups</button>
+        <div class="footer-note">
+          🏀 **Tip:** This generator parses NBA output from your script. Ensure the script is formatted properly for smooth processing.
+        </div>
       </form>
     </div>
   </div>
 
+  <!-- Notes Section -->
   <div class="card">
     <div class="card-h">
-      <h2>Notes</h2>
-      <p>Make sure NBA prints lineup rows consistently.</p>
+      <h2>Formatting Tips</h2>
+      <p>How to ensure lineups are processed correctly:</p>
     </div>
     <div class="card-b">
-      <div class="badge">Expected output row format</div>
+      <div class="badge">Expected Output Row Format</div>
       <div class="footer-note" style="margin-top:10px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;">
         PG  Player Name  TEAM  PG/SF  $7200 proj:51.38
       </div>
       <div class="footer-note">
-        If your NBA output differs, paste one printed lineup block and I’ll adjust the parser regex to match it.
+        If your NBA script outputs lineups in unfamiliar formats, paste one of your rows or blocks, and I’ll adjust the lineup parser to match it.
       </div>
     </div>
   </div>

@@ -1,40 +1,47 @@
 {% extends "base.html" %}
 {% block content %}
 
+<!-- SEO Metadata -->
+<title>DraftKings Lineup Optimizer | Home</title>
+<meta name="description" content="Welcome to the DraftKings Lineup Optimizer! Run NFL and NBA lineup generators with stacking strategies, salary constraints, and diversity options.">
+<meta name="keywords" content="DraftKings lineup optimizer, NFL lineup generator, NBA lineup generator, DFS optimizer, fantasy sports tools, lineup diversification">
+
 <div class="grid two">
+  <!-- Welcome Card -->
   <div class="card">
     <div class="card-h">
-      <h1>Welcome</h1>
-      <p>Run your local NFL/NBA generators and view lineups in a DraftKings-style format.</p>
+      <h1>Welcome to DK Lineup Studio</h1>
+      <p>Generate your NFL and NBA DraftKings lineups effortlessly. Choose between generators to create customizable lineups that boost your winning chances in DFS contests.</p>
     </div>
     <div class="card-b">
       <div style="display:flex; gap:10px; flex-wrap:wrap;">
-        <a class="btn secondary" href="{{ url_for('nfl') }}">Open NFL Generator</a>
-        <a class="btn secondary" href="{{ url_for('nba') }}">Open NBA Generator</a>
+        <a class="btn secondary" href="{{ url_for('nfl') }}" title="Go to the NFL Lineup Generator">Open NFL Generator</a>
+        <a class="btn secondary" href="{{ url_for('nba') }}" title="Go to the NBA Lineup Generator">Open NBA Generator</a>
       </div>
 
       <div class="footer-note">
-        Tip: If a run times out, reduce number of lineups or loosen constraints (min salary / uniqueness / randomness).
+        💡 **Pro Tip**: If a lineup generation times out, reduce the number of lineups or adjust constraints like "Min Salary," "Min Unique," or "Randomness."
       </div>
     </div>
   </div>
 
+  <!-- Inputs Explanation Card -->
   <div class="card">
     <div class="card-h">
-      <h2>How the inputs work</h2>
-      <p>Quick definitions to match DK optimizer behavior.</p>
+      <h2>How Lineup Inputs Work</h2>
+      <p>Understand how customizable inputs help generate optimal DraftKings lineups.</p>
     </div>
     <div class="card-b">
       <div class="badge blue">Min Unique</div>
-      <p class="footer-note" style="margin-top:8px;">
-        Minimum number of players that must be different between any two lineups. Higher = more variety, but can reduce feasibility.
+      <p class="footer-note" style="margin-top:8px;" title="Set the minimum number of unique players between lineups.">
+        Choose the **minimum number of unique players** required between lineups. A higher value increases lineup variety but may reduce feasibility on smaller slates.
       </p>
 
       <div style="height:10px;"></div>
 
       <div class="badge blue">Randomness</div>
-      <p class="footer-note" style="margin-top:8px;">
-        Adds a small random boost/penalty to projections so lineups aren’t identical. Higher = more lineup diversity, but slightly less “pure optimal.”
+      <p class="footer-note" style="margin-top:8px;" title="Add randomness to projections for lineup diversity.">
+        Introduces a **random adjustment** to player projections, ensuring lineups are distinct. Higher randomness increases lineup diversity but results in slightly less optimal configurations. Typical values: **0.6–1.2**.
       </p>
     </div>
   </div>
