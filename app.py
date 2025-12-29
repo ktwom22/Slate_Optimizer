@@ -5,7 +5,8 @@ from flask import Flask, render_template, request, redirect, url_for, flash
 
 import NFL
 import NBA
-import nfl_showdown  # ✅ your new file: nfl_showdown.py
+import nfl_showdown  # your file: nfl_showdown.py
+import nhl_optimizer as NHL  # <-- your NHL file/module name (change if different)
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "local-dev")
@@ -49,10 +50,14 @@ def _require_fn(module, fn_name: str):
 
 
 def df_to_lineups(df: pd.DataFrame, slots: list[str], meta_fields: dict[str, str]):
+    """
+    Expects DK-style columns:
+      {SLOT}_name, {SLOT}_team, {SLOT}_salary, {SLOT}_proj
+    """
     if df is None or df.empty:
         raise RuntimeError("Generator returned no lineups (empty DataFrame).")
 
-    # Validate first slot columns exist
+    # validate first slot columns exist
     s0 = slots[0]
     needed = [f"{s0}_name", f"{s0}_team", f"{s0}_salary", f"{s0}_proj"]
     missing = [c for c in needed if c not in df.columns]
@@ -82,7 +87,6 @@ def df_to_lineups(df: pd.DataFrame, slots: list[str], meta_fields: dict[str, str
             if team:
                 team_usage[team] = team_usage.get(team, 0) + 1
 
-        # Stack template (simple team-count signature)
         stack_template = "-".join(str(count) for count in sorted(team_usage.values(), reverse=True))
 
         meta = {}
@@ -123,7 +127,7 @@ def nfl():
         return render_template("nfl.html", title="NFL DK Classic")
 
     try:
-        num_lineups = max(1, min(_safe_int(request.form.get("num_lineups", "20"), 20), 50))
+        num_lineups = max(1, min(_safe_int(request.form.get("num_lineups", "20"), 20), 150))
         min_unique = max(0, min(_safe_int(request.form.get("min_unique", "2"), 2), 8))
         min_salary = max(0, _safe_int(request.form.get("min_salary", "46000"), 46000))
         randomness = max(0.0, min(_safe_float(request.form.get("randomness", "1.0"), 1.0), 3.0))
@@ -147,65 +151,13 @@ def nfl():
         return _error("NFL /nfl", e, "nfl")
 
 
-@app.route("/nfl-showdown", methods=["GET", "POST"])
-def nfl_showdown_route():
-    if request.method == "GET":
-        # ✅ uses your template: templates/nfl_showdown.html
-        return render_template("nfl_showdown.html", title="NFL DK Showdown")
-
-    try:
-        # Match the form names from nfl_showdown.html
-        num_lineups = max(1, min(_safe_int(request.form.get("num_lineups", "20"), 20), 150))
-        min_unique = max(0, min(_safe_int(request.form.get("min_unique", "2"), 2), 5))
-        min_salary = max(0, _safe_int(request.form.get("min_salary", "48500"), 48500))
-        randomness = max(0.0, min(_safe_float(request.form.get("randomness", "1.2"), 1.2), 3.0))
-        salary_cap = max(0, min(_safe_int(request.form.get("salary_cap", "50000"), 50000), 50000))
-
-        max_player_exposure = _safe_float(request.form.get("max_player_exposure", "0.50"), 0.50)
-        max_player_exposure = max(0.10, min(max_player_exposure, 1.00))
-
-        soft_exposure_penalty = _safe_float(request.form.get("soft_exposure_penalty", "0"), 0.0)
-        soft_exposure_penalty = max(0.0, min(soft_exposure_penalty, 50.0))
-
-        max_players_per_team = _safe_int(request.form.get("max_players_per_team", "5"), 5)
-        max_players_per_team = max(3, min(max_players_per_team, 5))
-
-        gen = _require_fn(nfl_showdown, "generate_nfl_showdown_df")
-
-        df = gen(
-            num_lineups=num_lineups,
-            min_unique=min_unique,
-            min_salary_spend=min_salary,
-            randomness=randomness,
-            salary_cap=salary_cap,
-            max_player_exposure=max_player_exposure,
-            soft_exposure_penalty=soft_exposure_penalty,
-            max_players_per_team=max_players_per_team,
-        ).head(num_lineups)
-
-        # Showdown slots must match the DF columns created by nfl_showdown.py
-        slots = ["CPT", "FLEX1", "FLEX2", "FLEX3", "FLEX4", "FLEX5"]
-        meta_fields = {"teams": "team_counts"}  # optional if your DF includes it
-        lineups = df_to_lineups(df, slots, meta_fields)
-
-        return render_template(
-            "results.html",
-            title="NFL Showdown Lineups",
-            lineups=lineups,
-            back_url=url_for("nfl_showdown_route")
-        )
-
-    except Exception as e:
-        return _error("NFL Showdown /nfl-showdown", e, "nfl_showdown_route")
-
-
 @app.route("/nba", methods=["GET", "POST"])
 def nba():
     if request.method == "GET":
         return render_template("nba.html", title="NBA DK Classic")
 
     try:
-        num_lineups = max(1, min(_safe_int(request.form.get("num_lineups", "20"), 20), 50))
+        num_lineups = max(1, min(_safe_int(request.form.get("num_lineups", "20"), 20), 150))
         min_unique = max(0, min(_safe_int(request.form.get("min_unique", "2"), 2), 8))
         min_salary = max(0, _safe_int(request.form.get("min_salary", "49500"), 49500))
         randomness = max(0.0, min(_safe_float(request.form.get("randomness", "0.8"), 0.8), 3.0))
@@ -227,6 +179,88 @@ def nba():
 
     except Exception as e:
         return _error("NBA /nba", e, "nba")
+
+
+@app.route("/nfl_showdown", methods=["GET", "POST"])
+def nfl_showdown_route():
+    if request.method == "GET":
+        return render_template("nfl_showdown.html", title="NFL Showdown (DK)")
+
+    try:
+        num_lineups = max(1, min(_safe_int(request.form.get("num_lineups", "20"), 20), 150))
+        min_unique = max(0, min(_safe_int(request.form.get("min_unique", "2"), 2), 8))
+        min_salary = max(0, _safe_int(request.form.get("min_salary", "48000"), 48000))
+        randomness = max(0.0, min(_safe_float(request.form.get("randomness", "1.0"), 1.0), 3.0))
+
+        # Optional: max salary (only passed if provided)
+        max_salary = None
+        max_salary_raw = request.form.get("max_salary", "")
+        if str(max_salary_raw).strip() != "":
+            ms = _safe_int(max_salary_raw, -1)
+            if ms > 0:
+                max_salary = ms
+
+        gen = _require_fn(nfl_showdown, "generate_nfl_showdown_df")
+
+        # Build kwargs safely so it won't crash if your generator doesn't accept max_salary_spend
+        kwargs = dict(
+            num_lineups=num_lineups,
+            min_unique=min_unique,
+            min_salary_spend=min_salary,
+            randomness=randomness,
+        )
+        if max_salary is not None:
+            kwargs["max_salary_spend"] = max_salary
+
+        df = gen(**kwargs).head(num_lineups)
+
+        slots = ["CPT", "FLEX1", "FLEX2", "FLEX3", "FLEX4", "FLEX5"]
+        meta_fields = {}  # optional
+        lineups = df_to_lineups(df, slots, meta_fields)
+
+        return render_template(
+            "results.html",
+            title="NFL Showdown Lineups",
+            lineups=lineups,
+            back_url=url_for("nfl_showdown_route"),
+        )
+
+    except Exception as e:
+        return _error("NFL Showdown /nfl_showdown", e, "nfl_showdown_route")
+
+
+# -----------------------------
+# NEW: NHL route
+# -----------------------------
+@app.route("/nhl", methods=["GET", "POST"])
+def nhl():
+    if request.method == "GET":
+        return render_template("nhl.html", title="NHL DK Classic")
+
+    try:
+        num_lineups = max(1, min(_safe_int(request.form.get("num_lineups", "20"), 20), 150))
+        min_unique = max(0, min(_safe_int(request.form.get("min_unique", "2"), 2), 8))
+        min_salary = max(0, _safe_int(request.form.get("min_salary", "47000"), 47000))
+        randomness = max(0.0, min(_safe_float(request.form.get("randomness", "1.0"), 1.0), 3.0))
+
+        gen = _require_fn(NHL, "generate_nhl_df")
+
+        df = gen(
+            num_lineups=num_lineups,
+            min_unique=min_unique,
+            min_salary_spend=min_salary,
+            randomness=randomness,
+        ).head(num_lineups)
+
+        # IMPORTANT: your NHL generator should output DK-style columns for these slots
+        slots = ["C1", "C2", "W1", "W2", "W3", "D1", "D2", "G", "UTIL"]
+        meta_fields = {"stack": "team_counts", "stack_template": "stack_template"}  # optional
+        lineups = df_to_lineups(df, slots, meta_fields)
+
+        return render_template("results.html", title="NHL Lineups", lineups=lineups, back_url=url_for("nhl"))
+
+    except Exception as e:
+        return _error("NHL /nhl", e, "nhl")
 
 
 if __name__ == "__main__":

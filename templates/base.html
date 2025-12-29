@@ -13,18 +13,11 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
 
-  <!-- ✅ Allow child templates to override title + meta -->
-  <title>{% block title %}{{ title or "DraftKings Lineup Optimizer | NFL & NBA DFS" }}{% endblock %}</title>
+  <title>{{ title or "DraftKings Lineup Optimizer | NFL, NBA, NHL DFS" }}</title>
 
-  {% block meta %}
-  <meta name="description" content="Optimize your NFL and NBA lineups with this DFS tool. Create winning DraftKings-style lineups with stacking strategies, salary constraints, and lineup diversity.">
-  <meta name="keywords" content="DraftKings lineup optimizer, DFS tool, NFL optimizer, NBA optimizer, DFS stacking strategies, fantasy sports, lineup builder, winning DFS strategy">
-  {% endblock %}
-
-  <!-- Canonical URL -->
+  <meta name="description" content="Optimize your NFL, NBA, and NHL DraftKings lineups with stacking, salary constraints, and lineup diversity. Includes NFL Showdown." />
+  <meta name="keywords" content="DraftKings lineup optimizer, DFS tool, NFL optimizer, NBA optimizer, NHL optimizer, NFL showdown optimizer, DFS stacking strategies, fantasy sports, lineup builder" />
   <link rel="canonical" href="{{ request.url }}" />
-
-  <!-- Favicon Icon -->
   <link rel="icon" href="/favicon.ico" type="image/x-icon" />
 
   <style>
@@ -70,23 +63,12 @@
       z-index: 10;
       backdrop-filter: blur(8px);
     }
-    .brand{
-      display:flex; flex-direction:column;
-      gap:2px;
-    }
-    .brand .title{
-      font-weight:800;
-      letter-spacing:.2px;
-      font-size:16px;
-    }
-    .brand .subtitle{
-      color:var(--muted);
-      font-size:12px;
-    }
 
-    .nav{
-      display:flex; gap:10px; flex-wrap:wrap;
-    }
+    .brand{ display:flex; flex-direction:column; gap:2px; }
+    .brand .title{ font-weight:800; letter-spacing:.2px; font-size:16px; }
+    .brand .subtitle{ color:var(--muted); font-size:12px; }
+
+    .nav{ display:flex; gap:10px; flex-wrap:wrap; }
     .pill{
       padding:8px 12px;
       border-radius:999px;
@@ -99,7 +81,6 @@
     .pill:hover{ transform: translateY(-1px); border-color: rgba(59,130,246,.55); }
     .pill.active{ border-color: rgba(59,130,246,.8); box-shadow: 0 0 0 3px rgba(59,130,246,.15); }
 
-    /* Flash and messages */
     .flash{
       margin-top:14px;
       padding:12px 14px;
@@ -115,41 +96,45 @@
 
 <body>
   <div class="container">
-    <!-- Top Bar -->
     <div class="topbar">
       <div class="brand">
         <div class="title">DK Lineup Studio</div>
-        <div class="subtitle">Local optimizer runner · NFL + NBA + Showdown</div>
+        <div class="subtitle">Local optimizer runner · NFL + NBA + NHL</div>
       </div>
 
       <div class="nav">
         <a class="pill {% if request.path=='/' %}active{% endif %}" href="{{ url_for('index') }}">Home</a>
 
-        <a class="pill {% if request.path=='/nfl' %}active{% endif %}" href="{{ url_for('nfl') }}">NFL</a>
-
-        <!-- ✅ Showdown link (new route name from app.py: nfl_showdown_route) -->
-        <a class="pill {% if request.path.startswith('/nfl-showdown') %}active{% endif %}"
+        <!-- NFL Showdown -->
+        <a class="pill {% if request.path.startswith('/nfl_showdown') %}active{% endif %}"
            href="{{ url_for('nfl_showdown_route') }}">NFL Showdown</a>
 
-        <a class="pill {% if request.path.startswith('/nba') %}active{% endif %}" href="{{ url_for('nba') }}">NBA</a>
+        <!-- NFL Classic -->
+        <a class="pill {% if request.path.startswith('/nfl') and not request.path.startswith('/nfl_showdown') %}active{% endif %}"
+           href="{{ url_for('nfl') }}">NFL</a>
+
+        <!-- NBA -->
+        <a class="pill {% if request.path.startswith('/nba') %}active{% endif %}"
+           href="{{ url_for('nba') }}">NBA</a>
+
+        <!-- NHL -->
+        <a class="pill {% if request.path.startswith('/nhl') %}active{% endif %}"
+           href="{{ url_for('nhl') }}">NHL</a>
       </div>
     </div>
 
-    <!-- Messages Flash -->
     {% with messages = get_flashed_messages() %}
       {% if messages %}
         <div class="flash" role="alert">{{ messages[0] }}</div>
       {% endif %}
     {% endwith %}
 
-    <!-- Page Content -->
     {% block content %}{% endblock %}
   </div>
 
-  <!-- Footer -->
   <footer style="text-align:center; margin-top:25px; color:var(--muted); font-size:12px;">
     <p>&copy; 2025 DK Lineup Studio. All rights reserved.</p>
-    <p>Optimized for NFL, NFL Showdown, and NBA DraftKings DFS creators.</p>
+    <p>Optimized for NFL, NBA, NHL DraftKings DFS creators (including Showdown).</p>
   </footer>
 </body>
 </html>

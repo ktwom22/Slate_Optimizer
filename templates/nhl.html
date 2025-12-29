@@ -1,0 +1,95 @@
+{# templates/nhl.html #}
+{% extends "base.html" %}
+{% block content %}
+
+<!-- SEO Metadata -->
+<title>NHL DraftKings Lineup Optimizer | Build Winning DFS Lineups</title>
+<meta name="description" content="Generate optimized NHL lineups for DraftKings DFS contests. Use team stacks, uniqueness constraints, and randomness to build winning GPP lineups.">
+<meta name="keywords" content="NHL lineup optimizer, DraftKings NHL optimizer, NHL DFS stacking, hockey DFS, lineup diversity, GPP strategy">
+
+<!-- Page Content -->
+<div class="grid two">
+  <!-- NHL Generator Form -->
+  <div class="card">
+    <div class="card-h">
+      <h1>NHL Lineup Generator</h1>
+      <p>Create optimized NHL DraftKings lineups using team-stacking tendencies (3-2 / 2-2) plus uniqueness and randomness.</p>
+    </div>
+    <div class="card-b">
+      <form class="form" method="POST">
+        <div class="row2">
+          <div>
+            <label>
+              Number of Lineups
+              <span class="hint">How many lineups you want to generate</span>
+            </label>
+            <input name="num_lineups" type="number" min="1" max="150" value="20" title="Enter the number of lineups to generate for NHL DFS" />
+          </div>
+
+          <div>
+            <label>
+              Minimum Salary Spend
+              <span class="hint">Set a minimum salary constraint for your lineup</span>
+            </label>
+            <input name="min_salary" type="number" min="0" max="50000" value="47000" title="Enter the minimum total salary for your lineup" />
+          </div>
+        </div>
+
+        <div class="row2">
+          <div>
+            <label>
+              Minimum Unique Players
+              <span class="info" data-tip="The minimum number of unique players between any two lineups. Higher values increase variety but may reduce feasibility.">i</span>
+            </label>
+            <input name="min_unique" type="number" min="0" max="8" value="2" title="Set the minimum number of unique players between lineups" />
+          </div>
+
+          <div>
+            <label>
+              Randomness
+              <span class="info" data-tip="Adds small randomness to projections to create diverse lineups. Suggested: 0.6–1.2">i</span>
+            </label>
+            <input name="randomness" type="number" step="0.1" min="0" max="3" value="0.9" title="Add randomness to player projections to vary lineups" />
+          </div>
+        </div>
+
+        <div class="row2">
+          <div>
+            <label>
+              Avoid Goalie vs Opposing Skaters
+              <span class="info" data-tip="If your CSV has an OPP/opponent column, this reduces lineups where your goalie faces too many skaters from the opponent.">i</span>
+            </label>
+            <select name="avoid_goalie_opp" title="Toggle goalie vs opposing skaters rule">
+              <option value="1" selected>On (recommended)</option>
+              <option value="0">Off</option>
+            </select>
+          </div>
+          <div></div>
+        </div>
+
+        <button class="btn" type="submit" title="Generate your lineups">Generate NHL Lineups</button>
+        <div class="footer-note">
+          🏒 <strong>Pro Tip:</strong> If generation fails, try fewer lineups, lower <em>Min Salary</em>, or reduce <em>Min Unique</em>.
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Notes Section -->
+  <div class="card">
+    <div class="card-h">
+      <h2>How Lineups Appear</h2>
+      <p>Here’s what you’ll see after generation:</p>
+    </div>
+    <div class="card-b">
+      <ul style="margin:0; padding-left:18px; color:var(--muted); font-size:13px;">
+        <li>Each lineup formatted as: POS / Player Name / Team / Salary / Projection</li>
+        <li>Lineup header shows total salary + projected points for quick review</li>
+        <li>You’ll also see a stack template (like <strong>3-2-1-1-1</strong>) based on team usage</li>
+        <li>Roster slots: <strong>C,C,W,W,W,D,D,G,UTIL</strong></li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
