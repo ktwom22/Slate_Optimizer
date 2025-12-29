@@ -13,7 +13,7 @@ NFL DraftKings SHOWDOWN Optimizer (ONE FILE) — nfl_showdown.py
    - Default: NO K at CPT
    - Default: NO DST at CPT (can allow)
    - CPT WR/TE => strongly prefers QB from same team (toggle)
-   - CPT QB => discourages same-team K (toggle)
+   - CPT QB => discourages same-team K (toggle)  ✅ FIXED (linearized penalty)
    - Max K+DST combined (default 2)
    - If roster DST, cap opposing team players (default 3)
 
@@ -31,7 +31,8 @@ Run:
   python -u nfl_showdown.py --num_lineups 20
 
 This module exposes:
-  - generate_showdown_df(...) -> pandas DataFrame (DK-style output)
+  - generate_nfl_showdown_df(...) -> pandas DataFrame (DK-style output)  ✅ Flask
+  - generate_showdown_df(...)     -> alias to the same function         ✅ CLI
 """
 
 import argparse
@@ -178,11 +179,6 @@ def _find_proj_col(df: pd.DataFrame) -> Optional[str]:
 
 
 def parse_players(df: pd.DataFrame, verbose: bool = True) -> Tuple[List[Player], Dict[str, str]]:
-    """
-    Returns:
-      players: list[Player]
-      team_to_opp: mapping team -> opp (best-effort)
-    """
     df = df.copy()
     df.columns = [str(c).strip() for c in df.columns]
 
@@ -209,7 +205,6 @@ def parse_players(df: pd.DataFrame, verbose: bool = True) -> Tuple[List[Player],
     df["proj"] = df[proj_col].apply(lambda v: _to_float(v, 0.0))
     df["opp"] = df[opp_col].apply(_clean_text) if opp_col else ""
 
-    # keep only relevant showdown positions (QB/RB/WR/TE/K/DST)
     df = df[(df["name"] != "") & (df["team"] != "") & (df["pos"] != "")]
     df = df[df["pos"].isin(["QB", "RB", "WR", "TE", "K", "DST"])]
     df = df[(df["salary"] > 0) & (df["proj"] > 0)]
@@ -227,7 +222,6 @@ def parse_players(df: pd.DataFrame, verbose: bool = True) -> Tuple[List[Player],
             opp=str(r["opp"]) if isinstance(r["opp"], str) else "",
         ))
 
-    # team->opp mapping best effort (prefer QB rows)
     team_to_opp: Dict[str, str] = {}
     for p in players:
         if p.pos == "QB" and p.opp:
@@ -235,14 +229,16 @@ def parse_players(df: pd.DataFrame, verbose: bool = True) -> Tuple[List[Player],
     for p in players:
         if p.team not in team_to_opp and p.opp:
             team_to_opp[p.team] = p.opp
-    # make it symmetric when possible
     for a, b in list(team_to_opp.items()):
         if b and b not in team_to_opp:
             team_to_opp[b] = a
 
     if verbose:
-        print(f"Detected columns -> POS:{pos_col} | NAME:{name_col} | TEAM:{team_col} | SALARY:{sal_col} | PROJ:{proj_col} | OPP:{opp_col or 'None'}", flush=True)
-        print("Sample players:", flush=True)
+        print(
+            f"Detected columns -> POS:{pos_col} | NAME:{name_col} | TEAM:{team_col} | "
+            f"SALARY:{sal_col} | PROJ:{proj_col} | OPP:{opp_col or 'None'}",
+            flush=True,
+        )
         for p in players[:10]:
             print(f"  {p.pos:<3} {p.name:<25} {p.team:<4} sal={p.salary:<5} proj={p.proj:<5.2f} opp={p.opp}", flush=True)
 
@@ -263,34 +259,26 @@ def optimize_one_showdown(
     randomness: float,
     seed: Optional[int],
 
-    # CPT pool controls
     allow_k_cpt: bool,
     allow_dst_cpt: bool,
 
-    # correlation toggles
     enforce_cpt_wrte_with_qb: bool,
     discourage_cpt_qb_with_same_team_k: bool,
 
-    # roster construction rules
     max_k_dst_total: int,
     dst_max_opp_players: int,
 
-    # exposure caps (optional)
     cpt_exposure_count: Optional[Dict[int, int]],
     flex_exposure_count: Optional[Dict[int, int]],
     max_cpt_exposure: Optional[int],
     max_flex_exposure: Optional[int],
 ) -> Optional[List[int]]:
-    """
-    Returns lineup indices in slot order: [CPT, FLEX1..FLEX5] as player indices.
-    """
     if seed is not None:
         random.seed(seed)
 
     n = len(players)
     all_idx = list(range(n))
 
-    # CPT eligibility
     def cpt_ok(p: Player) -> bool:
         if p.pos == "K" and not allow_k_cpt:
             return False
@@ -302,42 +290,32 @@ def optimize_one_showdown(
     if not cpt_idx:
         return None
 
-    # build by team indices
     teams = sorted(set(p.team for p in players))
     team_players: Dict[str, List[int]] = {t: [] for t in teams}
     for i, p in enumerate(players):
         team_players[p.team].append(i)
 
-    # variables: x[(i, slot)] only created if eligible
     x: Dict[Tuple[int, str], pulp.LpVariable] = {}
-    # CPT vars only for cpt_idx
     for i in cpt_idx:
         x[(i, "CPT")] = pulp.LpVariable(f"x_{i}_CPT", cat="Binary")
-    # FLEX vars for all players
     for s in SLOTS[1:]:
         for i in all_idx:
             x[(i, s)] = pulp.LpVariable(f"x_{i}_{s}", cat="Binary")
 
     prob = pulp.LpProblem("NFL_DK_SHOWDOWN", pulp.LpMaximize)
 
-    # fill each slot exactly once
     prob += pulp.lpSum(x[(i, "CPT")] for i in cpt_idx) == 1, "fill_CPT"
     for s in SLOTS[1:]:
         prob += pulp.lpSum(x[(i, s)] for i in all_idx) == 1, f"fill_{s}"
 
-    # each player at most once across all slots
-    selected = {}
+    selected: Dict[int, pulp.LpAffineExpression] = {}
     for i in all_idx:
-        selected[i] = (
-            x.get((i, "CPT"), 0) +
-            pulp.lpSum(x[(i, s)] for s in SLOTS[1:])
-        )
+        selected[i] = x.get((i, "CPT"), 0) + pulp.lpSum(x[(i, s)] for s in SLOTS[1:])
         prob += selected[i] <= 1, f"one_slot_{i}"
 
-    # salary (CPT is 1.5x)
     total_salary = pulp.lpSum(
-        (1.5 * players[i].salary) * x.get((i, "CPT"), 0) +
-        players[i].salary * pulp.lpSum(x[(i, s)] for s in SLOTS[1:])
+        (1.5 * players[i].salary) * x.get((i, "CPT"), 0)
+        + players[i].salary * pulp.lpSum(x[(i, s)] for s in SLOTS[1:])
         for i in all_idx
     )
     prob += total_salary <= salary_cap, "salary_cap"
@@ -345,20 +323,16 @@ def optimize_one_showdown(
     if max_salary_spend is not None:
         prob += total_salary <= max_salary_spend, "max_salary_spend"
 
-    # team counts for constraints
     team_count = {t: pulp.lpSum(selected[i] for i in idxs) for t, idxs in team_players.items()}
 
-    # position counts (K/DST limits)
     k_count = pulp.lpSum(selected[i] for i in all_idx if players[i].pos == "K")
     dst_count = pulp.lpSum(selected[i] for i in all_idx if players[i].pos == "DST")
     prob += (k_count + dst_count) <= max_k_dst_total, "max_k_dst_total"
 
-    # DST opp cap rule: if DST chosen from team T, limit opposing team players
     if dst_max_opp_players is not None and dst_max_opp_players >= 0:
         dst_team = {t: pulp.LpVariable(f"dst_{t}", cat="Binary") for t in teams}
         for t in teams:
-            idxs = team_players[t]
-            dst_idxs = [i for i in idxs if players[i].pos == "DST"]
+            dst_idxs = [i for i in team_players[t] if players[i].pos == "DST"]
             if dst_idxs:
                 prob += dst_team[t] == pulp.lpSum(selected[i] for i in dst_idxs), f"dst_team_eq_{t}"
             else:
@@ -367,9 +341,8 @@ def optimize_one_showdown(
         for t in teams:
             opp = team_to_opp.get(t, "")
             if opp and opp in team_players:
-                prob += team_count[opp] <= dst_max_opp_players + 6 * (1 - dst_team[t]), f"dst_caps_opp_{t}_vs_{opp}"
+                prob += team_count[opp] <= dst_max_opp_players + LINEUP_SIZE * (1 - dst_team[t]), f"dst_caps_opp_{t}_vs_{opp}"
 
-    # correlation: CPT WR/TE implies QB same team (optional hard rule)
     if enforce_cpt_wrte_with_qb:
         for t in teams:
             qb_on_t = pulp.lpSum(selected[i] for i in team_players[t] if players[i].pos == "QB")
@@ -380,46 +353,52 @@ def optimize_one_showdown(
             )
             prob += qb_on_t >= cpt_wrte_on_t, f"cpt_wrte_implies_qb_{t}"
 
-    # discourage CPT QB with same-team K: implement as a penalty (soft) OR hard rule.
-    # We'll do it as a soft penalty in the objective.
-    # But if you want it hard, uncomment and use:
-    # if discourage_cpt_qb_with_same_team_k:
-    #   for t in teams:
-    #       cpt_qb_t = pulp.lpSum(x.get((i,"CPT"),0) for i in team_players[t] if players[i].pos=="QB")
-    #       k_t = pulp.lpSum(selected[i] for i in team_players[t] if players[i].pos=="K")
-    #       prob += k_t <= 6*(1-cpt_qb_t), f"no_k_with_cpt_qb_{t}"
-
-    # uniqueness vs previous lineups
     if previous_lineups and min_unique_vs_previous > 0:
         max_overlap = LINEUP_SIZE - min_unique_vs_previous
         for li, prev in enumerate(previous_lineups, start=1):
             prob += pulp.lpSum(selected[i] for i in prev) <= max_overlap, f"uniq_prev_{li}"
 
-    # exposure caps (if counts passed in)
     if cpt_exposure_count is not None and max_cpt_exposure is not None:
         for i in cpt_idx:
             if cpt_exposure_count.get(i, 0) >= max_cpt_exposure:
                 prob += x.get((i, "CPT"), 0) == 0, f"cap_cpt_{i}"
+
     if flex_exposure_count is not None and max_flex_exposure is not None:
         for i in all_idx:
             if flex_exposure_count.get(i, 0) >= max_flex_exposure:
                 prob += pulp.lpSum(x[(i, s)] for s in SLOTS[1:]) == 0, f"cap_flex_{i}"
 
-    # objective: CPT 1.5x proj, FLEX 1x proj
     noise = [random.uniform(-randomness, randomness) for _ in range(n)] if randomness > 0 else [0.0] * n
     base_points = pulp.lpSum(
-        (1.5 * (players[i].proj + noise[i])) * x.get((i, "CPT"), 0) +
-        (players[i].proj + noise[i]) * pulp.lpSum(x[(i, s)] for s in SLOTS[1:])
+        (1.5 * (players[i].proj + noise[i])) * x.get((i, "CPT"), 0)
+        + (players[i].proj + noise[i]) * pulp.lpSum(x[(i, s)] for s in SLOTS[1:])
         for i in all_idx
     )
 
-    # soft penalty to reduce CPT QB + same-team K
+    # ✅ FIX: linearized penalty (no more expression * expression)
     penalty = 0
     if discourage_cpt_qb_with_same_team_k:
+        penalty_weight = 0.75
         for t in teams:
-            cpt_qb_t = pulp.lpSum(x.get((i, "CPT"), 0) for i in team_players[t] if players[i].pos == "QB")
-            k_t = pulp.lpSum(selected[i] for i in team_players[t] if players[i].pos == "K")
-            penalty += 0.75 * cpt_qb_t * k_t  # small penalty
+            cpt_qb_t = pulp.lpSum(
+                x.get((i, "CPT"), 0)
+                for i in team_players[t]
+                if players[i].pos == "QB"
+            )
+            k_t = pulp.lpSum(
+                selected[i]
+                for i in team_players[t]
+                if players[i].pos == "K"
+            )
+            # optional: cap to 1 kicker from a team (keeps z clean)
+            prob += k_t <= 1, f"cap_k_team_{t}"
+
+            z = pulp.LpVariable(f"z_cptqb_and_k_{t}", cat="Binary")
+            prob += z <= cpt_qb_t, f"z_le_cptqb_{t}"
+            prob += z <= k_t, f"z_le_k_{t}"
+            prob += z >= cpt_qb_t + k_t - 1, f"z_ge_both_{t}"
+
+            penalty += penalty_weight * z
 
     prob += base_points - penalty, "objective"
 
@@ -433,9 +412,7 @@ def optimize_one_showdown(
     if pulp.LpStatus[status] != "Optimal":
         return None
 
-    # read solution
     chosen: List[int] = []
-    # CPT
     cpt_pick = None
     for i in cpt_idx:
         v = x.get((i, "CPT"))
@@ -446,7 +423,6 @@ def optimize_one_showdown(
         return None
     chosen.append(cpt_pick)
 
-    # FLEX slots
     for s in SLOTS[1:]:
         pick = None
         for i in all_idx:
@@ -490,14 +466,12 @@ def lineups_to_df(players: List[Player], built: List[List[int]]) -> pd.DataFrame
         stack = "-".join(str(v) for v in sorted(team_counts.values(), reverse=True))
 
         row: Dict[str, object] = {}
-        # CPT columns (note: CPT salary/proj shown as MULTIPLIED values)
         row["CPT_name"] = players[cpt].name
         row["CPT_team"] = players[cpt].team
         row["CPT_pos"] = players[cpt].pos
         row["CPT_salary"] = int(round(1.5 * players[cpt].salary))
         row["CPT_proj"] = float(round(1.5 * players[cpt].proj, 2))
 
-        # FLEX columns
         for k, idx in enumerate(flex, start=1):
             p = players[idx]
             row[f"FLEX{k}_name"] = p.name
@@ -518,7 +492,7 @@ def lineups_to_df(players: List[Player], built: List[List[int]]) -> pd.DataFrame
 # -----------------------------
 # PUBLIC API (for Flask)
 # -----------------------------
-def generate_showdown_df(
+def generate_nfl_showdown_df(
     num_lineups: int = 20,
     min_unique: int = 2,
     min_salary_spend: int = 44000,
@@ -542,9 +516,6 @@ def generate_showdown_df(
 
     verbose: bool = False,
 ) -> pd.DataFrame:
-    """
-    Returns a DK-style DataFrame for showdown with CPT/FLEX columns.
-    """
     url = csv_url or CSV_URL_DEFAULT
     df = fetch_csv_to_df(url)
     players, team_to_opp = parse_players(df, verbose=verbose)
@@ -555,9 +526,7 @@ def generate_showdown_df(
     cpt_exposure_count: Dict[int, int] = {}
     flex_exposure_count: Dict[int, int] = {}
 
-    # small relax ladder for feasibility
     relaxes = [
-        # (uniq_relax, min_sal_relax, randomness_bump)
         (0, 0, 0.0),
         (1, 0, 0.1),
         (2, 800, 0.2),
@@ -608,7 +577,6 @@ def generate_showdown_df(
             built.append(lu)
             prev_sets.append(set(lu))
 
-            # update exposure counts
             cpt_exposure_count[lu[0]] = cpt_exposure_count.get(lu[0], 0) + 1
             for idx in lu[1:]:
                 flex_exposure_count[idx] = flex_exposure_count.get(idx, 0) + 1
@@ -619,14 +587,15 @@ def generate_showdown_df(
     if not built:
         raise RuntimeError(
             "No showdown lineups generated.\n"
-            "Try loosening:\n"
-            "  - lower min_salary_spend (e.g. 42000)\n"
-            "  - set min_unique lower (0 or 1)\n"
-            "  - increase randomness (1.0)\n"
-            "  - allow DST CPT if player pool is small\n"
+            "Try loosening min_salary_spend / min_unique or increase randomness."
         )
 
     return lineups_to_df(players, built)
+
+
+# ✅ alias so your CLI call works (your CLI uses generate_showdown_df)
+def generate_showdown_df(**kwargs) -> pd.DataFrame:
+    return generate_nfl_showdown_df(**kwargs)
 
 
 # -----------------------------
@@ -645,15 +614,15 @@ def main():
 
     ap.add_argument("--allow_k_cpt", action="store_true")
     ap.add_argument("--allow_dst_cpt", action="store_true")
-    ap.add_argument("--no_cpt_wrte_qb", action="store_true", help="Disable CPT WR/TE => QB same team rule")
-    ap.add_argument("--no_qb_k_penalty", action="store_true", help="Disable CPT QB + same-team K penalty")
+    ap.add_argument("--no_cpt_wrte_qb", action="store_true")
+    ap.add_argument("--no_qb_k_penalty", action="store_true")
     ap.add_argument("--max_k_dst_total", type=int, default=2)
     ap.add_argument("--dst_max_opp_players", type=int, default=3)
 
     ap.add_argument("--max_cpt_exposure", type=int, default=-1)
     ap.add_argument("--max_flex_exposure", type=int, default=-1)
 
-    ap.add_argument("--cbc_msg", action="store_true", help="Show CBC solver output")
+    ap.add_argument("--cbc_msg", action="store_true")
     args = ap.parse_args()
 
     global CBC_MSG
@@ -664,7 +633,7 @@ def main():
     max_cpt_exp = None if args.max_cpt_exposure is None or args.max_cpt_exposure < 0 else args.max_cpt_exposure
     max_flex_exp = None if args.max_flex_exposure is None or args.max_flex_exposure < 0 else args.max_flex_exposure
 
-    out_df = generate_showdown_df(
+    out_df = generate_nfl_showdown_df(
         num_lineups=args.num_lineups,
         min_unique=args.min_unique,
         min_salary_spend=args.min_salary_spend,
