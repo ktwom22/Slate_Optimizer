@@ -6,14 +6,129 @@
 <meta name="description" content="View your DraftKings-style NFL and NBA lineup results. Analyze lineups by position, player, team, salary, projected points, and projected ownership tiers.">
 <meta name="keywords" content="lineup results, NFL lineup viewer, NBA lineup viewer, DraftKings lineups, DFS optimizer, fantasy sports lineups, projected ownership, chalk, sneaky">
 
+<style>
+  /* ---------- Mobile swipe carousel ---------- */
+  .swipe-wrap {
+    display: none;
+    margin-top: 12px;
+  }
+  .swipe-track {
+    display: flex;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+    gap: 12px;
+    padding-bottom: 10px;
+  }
+  .swipe-track::-webkit-scrollbar { display: none; }
+  .swipe-slide {
+    scroll-snap-align: start;
+    flex: 0 0 100%;
+    max-width: 100%;
+  }
+
+  /* Mobile controls (dots + arrows) */
+  .swipe-controls {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-top: 10px;
+  }
+  .swipe-dots {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    justify-content: center;
+    flex: 1;
+  }
+  .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 999px;
+    opacity: 0.35;
+    background: currentColor;
+    cursor: pointer;
+  }
+  .dot.active { opacity: 0.95; }
+
+  .swipe-btn {
+    border: 1px solid rgba(0,0,0,0.15);
+    border-radius: 10px;
+    padding: 8px 10px;
+    background: transparent;
+    cursor: pointer;
+    font-weight: 600;
+  }
+
+  /* ---------- Desktop list stays as-is ---------- */
+  .desktop-wrap {
+    display: grid;
+    gap: 14px;
+  }
+
+  /* ---------- Table tuning for mobile readability ---------- */
+  @media (max-width: 900px) {
+    .desktop-wrap { display: none; }
+    .swipe-wrap { display: block; }
+
+    /* tighten spacing for small screens */
+    .lineup-card { border-radius: 16px; }
+    .lineup-h { padding: 12px 12px 8px 12px; }
+    .lineup-title { font-size: 18px; }
+    .lineup-meta { display: flex; flex-wrap: wrap; gap: 6px; }
+
+    /* make table fit */
+    .table {
+      font-size: 13px;
+    }
+    .table th, .table td {
+      padding: 8px 8px;
+      vertical-align: middle;
+      white-space: nowrap;
+    }
+    /* allow player name to wrap a bit */
+    .table td:nth-child(2) {
+      white-space: normal;
+      line-height: 1.1;
+      max-width: 180px;
+    }
+
+    /* sticky header inside each slide to reduce “lost context” */
+    .table thead th {
+      position: sticky;
+      top: 0;
+      z-index: 2;
+      background: inherit; /* uses whatever your base table header bg is */
+    }
+
+    /* IMPORTANT:
+       avoid a vertical scroll container; keep it as normal page scroll.
+       the *carousel* scrolls horizontally only. */
+  }
+
+  /* small helper text on mobile */
+  .swipe-hint {
+    display: none;
+    font-size: 12px;
+    opacity: 0.75;
+    margin-top: 6px;
+  }
+  @media (max-width: 900px) {
+    .swipe-hint { display: block; }
+  }
+</style>
+
 <div class="card" style="margin-top:18px;">
   <!-- Header Section -->
-  <div class="card-h" style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
-    <div>
-      <h1>{{ title }}</h1>
-      <p>Review your generated DraftKings-style lineups with detailed metrics for each player.</p>
-      <p>🚀 Columns: Position, Player, Team, Salary, Projected Points{% if lineups and lineups[0].meta and lineups[0].meta.has_own %}, Projected Ownership, Chalk/Sneaky{% endif %}</p>
+  <div class="card-h" style="display:flex; align-items:flex-start; justify-content:space-between; gap:12px; flex-wrap:wrap;">
+    <div style="min-width:240px;">
+      <h1 style="margin-bottom:6px;">{{ title }}</h1>
+      <p style="margin:0 0 6px 0;">Review your generated DraftKings-style lineups with detailed metrics for each player.</p>
+      <p style="margin:0;">🚀 Columns: Position, Player, Team, Salary, Projected Points{% if lineups and lineups[0].meta and lineups[0].meta.has_own %}, Projected Ownership, Chalk/Sneaky{% endif %}</p>
+      <div class="swipe-hint">Tip: Swipe left/right to switch lineups.</div>
     </div>
+
     <div style="display:flex; gap:10px; flex-wrap:wrap;">
       <a class="btn secondary" href="{{ back_url }}" title="Go back to the previous page">Back</a>
       {% if csv_path == "nfl" %}
@@ -27,9 +142,107 @@
     {% if not lineups or lineups|length == 0 %}
       <div class="footer-note" title="No lineups to display. Please generate lineups first.">No lineups to display.</div>
     {% else %}
-      <div style="display:grid; gap:14px;">
+
+      <!-- MOBILE: swipe carousel -->
+      <div class="swipe-wrap">
+        <div id="swipeTrack" class="swipe-track" aria-label="Lineup carousel">
+          {% for l in lineups %}
+            <div class="swipe-slide">
+              <div class="lineup-card">
+                <div class="lineup-h">
+                  <div class="left">
+                    <div class="lineup-title">Lineup #{{ loop.index }}</div>
+                    <div class="lineup-meta">
+                      <span class="badge good">Salary <span class="mono">${{ "{:,}".format(l.total_salary) }}</span></span>
+                      <span class="badge good">Proj <span class="mono">{{ "%.2f"|format(l.total_proj) }}</span></span>
+
+                      {% if l.meta and l.meta.contest_type %}
+                        <span class="badge blue">Type <span class="mono">{{ l.meta.contest_type }}</span></span>
+                      {% endif %}
+
+                      {% if l.meta and l.meta.chalk_ct is not none %}
+                        <span class="badge">Chalk <span class="mono">{{ l.meta.chalk_ct }}</span></span>
+                      {% endif %}
+                      {% if l.meta and l.meta.sneaky_ct is not none %}
+                        <span class="badge blue">Sneaky <span class="mono">{{ l.meta.sneaky_ct }}</span></span>
+                      {% endif %}
+
+                      {% if l.meta and l.meta.stack %}
+                        <span class="badge">Stack <span class="mono">{{ l.meta.stack }}</span></span>
+                      {% endif %}
+                      {% if l.meta and l.meta.stack_template %}
+                        <span class="badge">Teams <span class="mono">{{ l.meta.stack_template }}</span></span>
+                      {% endif %}
+                    </div>
+                  </div>
+                </div>
+
+                <div style="padding:12px;">
+                  <table class="table" title="DraftKings-style table displaying lineup details">
+                    <thead>
+                      <tr>
+                        <th style="width:58px;">POS</th>
+                        <th>Player</th>
+                        <th style="width:60px;">Tm</th>
+                        <th style="width:88px;">Sal</th>
+                        <th style="width:86px;">Pts</th>
+
+                        {% if l.meta and l.meta.has_own %}
+                          <th style="width:74px;">Own%</th>
+                        {% endif %}
+                        {% if l.meta and (l.meta.has_chalk or l.meta.has_sneaky) %}
+                          <th style="width:72px;">Tier</th>
+                        {% endif %}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {% for r in l.rows %}
+                        <tr>
+                          <td class="mono"><strong>{{ r.pos }}</strong></td>
+                          <td>{{ r.player }}</td>
+                          <td class="mono">{{ r.team }}</td>
+                          <td class="mono">${{ "{:,}".format(r.salary) }}</td>
+                          <td class="mono">{{ "%.2f"|format(r.proj) }}</td>
+
+                          {% if l.meta and l.meta.has_own %}
+                            <td class="mono">
+                              {{ "%.1f"|format(r.own if r.own is defined else 0.0) }}%
+                            </td>
+                          {% endif %}
+
+                          {% if l.meta and (l.meta.has_chalk or l.meta.has_sneaky) %}
+                            <td>
+                              {% set c = (r.chalk if r.chalk is defined else 0) %}
+                              {% set s = (r.sneaky if r.sneaky is defined else 0) %}
+                              {% if c == 1 %}
+                                <span class="badge good">Chalk</span>
+                              {% elif s == 1 %}
+                                <span class="badge blue">Sneaky</span>
+                              {% else %}
+                                <span class="badge">Mid</span>
+                              {% endif %}
+                            </td>
+                          {% endif %}
+                        </tr>
+                      {% endfor %}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+
+        <div class="swipe-controls">
+          <button id="prevBtn" class="swipe-btn" type="button" aria-label="Previous lineup">◀</button>
+          <div id="dots" class="swipe-dots" aria-label="Lineup dots"></div>
+          <button id="nextBtn" class="swipe-btn" type="button" aria-label="Next lineup">▶</button>
+        </div>
+      </div>
+
+      <!-- DESKTOP: normal stacked cards -->
+      <div class="desktop-wrap">
         {% for l in lineups %}
-          <!-- Lineup Card -->
           <div class="lineup-card">
             <div class="lineup-h">
               <div class="left">
@@ -46,7 +259,7 @@
                     <span class="badge" title="Number of chalk plays in lineup">Chalk <span class="mono">{{ l.meta.chalk_ct }}</span></span>
                   {% endif %}
                   {% if l.meta and l.meta.sneaky_ct is not none %}
-                    <span class="badge" title="Number of low-owned plays in lineup">Sneaky <span class="mono">{{ l.meta.sneaky_ct }}</span></span>
+                    <span class="badge blue" title="Number of low-owned plays in lineup">Sneaky <span class="mono">{{ l.meta.sneaky_ct }}</span></span>
                   {% endif %}
 
                   {% if l.meta and l.meta.template %}
@@ -117,6 +330,64 @@
           </div>
         {% endfor %}
       </div>
+
+      <script>
+        (function () {
+          const track = document.getElementById("swipeTrack");
+          const dotsWrap = document.getElementById("dots");
+          const prevBtn = document.getElementById("prevBtn");
+          const nextBtn = document.getElementById("nextBtn");
+          if (!track || !dotsWrap || !prevBtn || !nextBtn) return;
+
+          const slides = Array.from(track.querySelectorAll(".swipe-slide"));
+          if (!slides.length) return;
+
+          // Build dots
+          dotsWrap.innerHTML = "";
+          const dots = slides.map((_, i) => {
+            const d = document.createElement("div");
+            d.className = "dot" + (i === 0 ? " active" : "");
+            d.setAttribute("role", "button");
+            d.setAttribute("aria-label", "Go to lineup " + (i + 1));
+            d.addEventListener("click", () => scrollToIndex(i));
+            dotsWrap.appendChild(d);
+            return d;
+          });
+
+          function clamp(n, min, max) { return Math.max(min, Math.min(max, n)); }
+
+          function currentIndex() {
+            const left = track.scrollLeft;
+            const w = track.getBoundingClientRect().width;
+            return clamp(Math.round(left / w), 0, slides.length - 1);
+          }
+
+          function scrollToIndex(i) {
+            const w = track.getBoundingClientRect().width;
+            track.scrollTo({ left: i * w, behavior: "smooth" });
+            setActive(i);
+          }
+
+          function setActive(i) {
+            dots.forEach((d, idx) => d.classList.toggle("active", idx === i));
+          }
+
+          // Buttons
+          prevBtn.addEventListener("click", () => scrollToIndex(currentIndex() - 1));
+          nextBtn.addEventListener("click", () => scrollToIndex(currentIndex() + 1));
+
+          // Update dots on scroll (debounced-ish)
+          let t = null;
+          track.addEventListener("scroll", () => {
+            if (t) cancelAnimationFrame(t);
+            t = requestAnimationFrame(() => setActive(currentIndex()));
+          });
+
+          // Ensure snap works cleanly on resize
+          window.addEventListener("resize", () => scrollToIndex(currentIndex()));
+        })();
+      </script>
+
     {% endif %}
   </div>
 </div>
