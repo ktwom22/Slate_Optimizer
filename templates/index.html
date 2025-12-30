@@ -1,48 +1,89 @@
 {% extends "base.html" %}
 {% block content %}
 
-<!-- SEO Metadata -->
-<title>DraftKings Lineup Optimizer | Home</title>
-<meta name="description" content="Welcome to the DraftKings Lineup Optimizer! Run NFL and NBA lineup generators with stacking strategies, salary constraints, and diversity options.">
-<meta name="keywords" content="DraftKings lineup optimizer, NFL lineup generator, NBA lineup generator, DFS optimizer, fantasy sports tools, lineup diversification">
+<div class="hero">
+  <h1>Build Smarter DraftKings Lineups</h1>
+  <p>
+    Create optimized NFL, NBA, and NHL lineups using projections, stacking logic,
+    and lineup diversity — built for DFS players, not spreadsheets.
+  </p>
+</div>
 
-<div class="grid two">
-  <!-- Welcome Card -->
+<div class="grid three" style="margin-top:20px;">
+  <!-- NFL -->
   <div class="card">
     <div class="card-h">
-      <h1>Welcome to DK Lineup Studio</h1>
-      <p>Generate your NFL and NBA DraftKings lineups effortlessly. Choose between generators to create customizable lineups that boost your winning chances in DFS contests.</p>
+      <h2>🏈 NFL Classic</h2>
     </div>
     <div class="card-b">
-      <div style="display:flex; gap:10px; flex-wrap:wrap;">
-        <a class="btn secondary" href="{{ url_for('nfl') }}" title="Go to the NFL Lineup Generator">Open NFL Generator</a>
-        <a class="btn secondary" href="{{ url_for('nba') }}" title="Go to the NBA Lineup Generator">Open NBA Generator</a>
-      </div>
-
-      <div class="footer-note">
-        💡 **Pro Tip**: If a lineup generation times out, reduce the number of lineups or adjust constraints like "Min Salary," "Min Unique," or "Randomness."
-      </div>
+      <p class="muted">
+        Full-slate NFL optimizer with QB stacks, salary control, and lineup uniqueness.
+      </p>
+      <ul class="muted" style="padding-left:18px; font-size:13px;">
+        <li>QB + pass catcher logic</li>
+        <li>Cash & GPP friendly</li>
+        <li>150-max ready</li>
+      </ul>
+      <a class="btn" href="{{ url_for('nfl') }}">Build NFL Lineups</a>
     </div>
   </div>
 
-  <!-- Inputs Explanation Card -->
+  <!-- NBA -->
   <div class="card">
     <div class="card-h">
-      <h2>How Lineup Inputs Work</h2>
-      <p>Understand how customizable inputs help generate optimal DraftKings lineups.</p>
+      <h2>🏀 NBA Classic</h2>
     </div>
     <div class="card-b">
-      <div class="badge blue">Min Unique</div>
-      <p class="footer-note" style="margin-top:8px;" title="Set the minimum number of unique players between lineups.">
-        Choose the **minimum number of unique players** required between lineups. A higher value increases lineup variety but may reduce feasibility on smaller slates.
+      <p class="muted">
+        NBA optimizer built for late news, value plays, and ownership leverage.
       </p>
+      <ul class="muted" style="padding-left:18px; font-size:13px;">
+        <li>Projected ownership tiers</li>
+        <li>Chalk vs sneaky balance</li>
+        <li>UTIL optimization</li>
+      </ul>
+      <a class="btn" href="{{ url_for('nba') }}">Build NBA Lineups</a>
+    </div>
+  </div>
 
-      <div style="height:10px;"></div>
-
-      <div class="badge blue">Randomness</div>
-      <p class="footer-note" style="margin-top:8px;" title="Add randomness to projections for lineup diversity.">
-        Introduces a **random adjustment** to player projections, ensuring lineups are distinct. Higher randomness increases lineup diversity but results in slightly less optimal configurations. Typical values: **0.6–1.2**.
+  <!-- NHL -->
+  <div class="card">
+    <div class="card-h">
+      <h2>🏒 NHL Classic</h2>
+    </div>
+    <div class="card-b">
+      <p class="muted">
+        NHL optimizer with exact stack control — goalies excluded from stacks.
       </p>
+      <ul class="muted" style="padding-left:18px; font-size:13px;">
+        <li>3-2-2, 4-3, custom stacks</li>
+        <li>Skaters-only stacking</li>
+        <li>Correlation-focused</li>
+      </ul>
+      <a class="btn" href="{{ url_for('nhl') }}">Build NHL Lineups</a>
+    </div>
+  </div>
+</div>
+
+<div class="card" style="margin-top:22px;">
+  <div class="card-h">
+    <h2>Why This Optimizer?</h2>
+  </div>
+  <div class="card-b">
+    <div class="grid two">
+      <div>
+        <p><strong>Built for DFS players</strong></p>
+        <p class="muted">
+          No bloated features, no black boxes. You control stacking, salary usage,
+          randomness, and lineup diversity.
+        </p>
+      </div>
+      <div>
+        <p><strong>Fast & Local</strong></p>
+        <p class="muted">
+          No accounts, no limits, no uploads.
+        </p>
+      </div>
     </div>
   </div>
 </div>

@@ -14,8 +14,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <title>{{ title or "DraftKings Lineup Optimizer | NFL, NBA, NHL DFS" }}</title>
-
-  <meta name="description" content="Optimize your NFL, NBA, and NHL DraftKings lineups with stacking, salary constraints, and lineup diversity. Includes NFL Showdown,Free Lineup Optimizer." />
+  <meta name="description" content="Optimize your NFL, NBA, and NHL DraftKings lineups with stacking, salary constraints, and lineup diversity. Includes NFL Showdown. Free lineup optimizer." />
   <meta name="keywords" content="Free DraftKings lineup optimizer, Free DFS tool, Free NFL optimizer, Free NBA optimizer, Free NHL optimizer, Free NFL showdown optimizer, DFS stacking strategies, fantasy sports, lineup builder" />
   <link rel="canonical" href="{{ request.url }}" />
   <link rel="icon" href="/favicon.ico" type="image/x-icon" />
@@ -39,6 +38,7 @@
 
     *{ box-sizing:border-box; }
     html,body{ height:100%; }
+
     body{
       margin:0;
       background:
@@ -52,7 +52,7 @@
     }
 
     a{ color:inherit; text-decoration:none; }
-    .container{ max-width:1140px; margin:0 auto; padding:28px 18px 50px; }
+    .container{ max-width:1140px; margin:0 auto; padding:28px 18px 60px; }
 
     /* Top bar */
     .topbar{
@@ -81,6 +81,8 @@
       color:var(--text);
       font-size:13px;
       transition: .15s ease;
+      user-select:none;
+      -webkit-tap-highlight-color: transparent;
     }
     .pill:hover{ transform: translateY(-1px); border-color: rgba(59,130,246,.6); }
     .pill.active{ border-color: rgba(59,130,246,.9); box-shadow: 0 0 0 3px rgba(59,130,246,.18); }
@@ -97,7 +99,7 @@
       white-space: pre-wrap;
     }
 
-    /* App layout helpers (use these in templates) */
+    /* App layout helpers */
     .hero{
       margin-top:18px;
       padding:18px 18px;
@@ -111,6 +113,7 @@
 
     .grid{ display:grid; gap:16px; margin-top:16px; }
     .grid.two{ grid-template-columns: 1.15fr .85fr; }
+
     @media (max-width: 980px){
       .grid.two{ grid-template-columns: 1fr; }
       .topbar{ position: static; }
@@ -132,7 +135,7 @@
     .card-h p{ margin:6px 0 0; color:var(--muted); font-size:13px; }
     .card-b{ padding:16px; }
 
-    /* Form styling */
+    /* Forms */
     .form{ display:flex; flex-direction:column; gap:12px; }
     .row2{
       display:grid;
@@ -147,14 +150,14 @@
       gap:8px;
       font-size:13px;
       color: var(--text);
-      font-weight: 700;
+      font-weight: 800;
       margin-bottom:6px;
     }
     .hint{
       display:block;
       margin-top:4px;
       color:var(--muted);
-      font-weight: 500;
+      font-weight: 600;
       font-size:12px;
     }
 
@@ -190,16 +193,18 @@
       background: linear-gradient(90deg, rgba(59,130,246,1), rgba(34,197,94,1));
       box-shadow: 0 14px 30px rgba(59,130,246,.18);
       transition:.15s ease;
+      -webkit-tap-highlight-color: transparent;
     }
     .btn:hover{ transform: translateY(-1px); }
     .btn:active{ transform: translateY(0px); }
+    .btn:disabled{ opacity:.65; cursor:not-allowed; transform:none; }
 
     .btn.secondary{
       background: rgba(255,255,255,.06);
       color: var(--text);
       border: 1px solid var(--line);
       box-shadow:none;
-      font-weight: 800;
+      font-weight: 850;
     }
 
     .footer-note{
@@ -214,7 +219,7 @@
       white-space: pre-wrap;
     }
 
-    /* Tooltip "i" bubbles */
+    /* Tooltips */
     .info{
       width:18px; height:18px;
       display:inline-flex;
@@ -243,13 +248,13 @@
       background: rgba(12,18,34,.96);
       color: var(--text);
       font-size:12px;
-      font-weight: 600;
+      font-weight: 650;
       box-shadow: var(--shadow);
       z-index: 999;
       white-space: normal;
     }
 
-    /* Results table helpers */
+    /* Tables */
     table{ width:100%; border-collapse: collapse; }
     th, td{
       border-bottom: 1px solid rgba(255,255,255,.10);
@@ -257,8 +262,16 @@
       font-size:13px;
       text-align:left;
     }
-    th{ color: var(--muted); font-weight:800; font-size:12px; letter-spacing:.3px; text-transform: uppercase; }
+    th{
+      color: var(--muted);
+      font-weight:850;
+      font-size:12px;
+      letter-spacing:.3px;
+      text-transform: uppercase;
+    }
+
     .muted{ color: var(--muted); }
+
     .badge{
       display:inline-flex;
       align-items:center;
@@ -269,7 +282,68 @@
       background: rgba(255,255,255,.04);
       color: var(--text);
       font-size: 12px;
-      font-weight: 800;
+      font-weight: 850;
+    }
+    .badge.good{ border-color: rgba(34,197,94,.40); background: rgba(34,197,94,.12); }
+    .badge.blue{ border-color: rgba(59,130,246,.40); background: rgba(59,130,246,.12); }
+    .mono{ font-variant-numeric: tabular-nums; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+
+    /* ----------------------------
+       Loading Overlay
+    ---------------------------- */
+    #loadingOverlay{
+      display:none;
+      position:fixed;
+      inset:0;
+      z-index:9999;
+      background: rgba(0,0,0,.45);
+      backdrop-filter: blur(2px);
+      align-items:center;
+      justify-content:center;
+      padding:20px;
+    }
+    #loadingCard{
+      background:#fff;
+      color:#0b1220;
+      border-radius:16px;
+      padding:18px 16px;
+      max-width:420px;
+      width:100%;
+      box-shadow: 0 10px 30px rgba(0,0,0,.25);
+      text-align:center;
+    }
+    #loadingTitle{ font-weight:900; font-size:18px; }
+    #loadingText{ margin-top:6px; opacity:.80; font-size:13px; }
+    #loadingTrack{
+      margin-top:14px;
+      height:10px;
+      background: rgba(0,0,0,.10);
+      border-radius:999px;
+      overflow:hidden;
+    }
+    #loadingBar{
+      height:10px;
+      width:20%;
+      background: rgba(0,0,0,.70);
+      border-radius:999px;
+    }
+    #loadingTip{
+      margin-top:10px;
+      font-size:12px;
+      opacity:.65;
+    }
+
+    /* Footer */
+    footer{
+      text-align:center;
+      margin-top:26px;
+      color:var(--muted);
+      font-size:12px;
+    }
+    footer p{ margin:6px 0; }
+
+    @media (prefers-reduced-motion: reduce){
+      .pill:hover, .btn:hover{ transform:none; }
     }
   </style>
 </head>
@@ -308,7 +382,79 @@
     {% block content %}{% endblock %}
   </div>
 
-  <footer style="text-align:center; margin-top:26px; color:var(--muted); font-size:12px;">
+  <!-- Loading overlay (global) -->
+  <div id="loadingOverlay" aria-hidden="true" role="status" aria-live="polite">
+    <div id="loadingCard">
+      <div id="loadingTitle">Building lineups…</div>
+      <div id="loadingText">This can take a few seconds.</div>
+
+      <div id="loadingTrack">
+        <div id="loadingBar"></div>
+      </div>
+
+      <div id="loadingTip">Tip: higher lineup count / uniqueness takes longer.</div>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      const overlay = document.getElementById("loadingOverlay");
+      const titleEl = document.getElementById("loadingTitle");
+      const textEl  = document.getElementById("loadingText");
+      const barEl   = document.getElementById("loadingBar");
+
+      if (!overlay || !titleEl || !textEl || !barEl) return;
+
+      let timer = null;
+      let w = 20;
+      let dir = 1;
+
+      function startBar() {
+        stopBar();
+        timer = setInterval(() => {
+          w += dir * 3;
+          if (w >= 92) { w = 92; dir = -1; }
+          if (w <= 18) { w = 18; dir = 1; }
+          barEl.style.width = w + "%";
+        }, 120);
+      }
+
+      function stopBar() {
+        if (timer) { clearInterval(timer); timer = null; }
+      }
+
+      window.showLoading = function (title, text) {
+        titleEl.textContent = title || "Building lineups…";
+        textEl.textContent  = text  || "This can take a few seconds.";
+        overlay.style.display = "flex";
+        overlay.setAttribute("aria-hidden", "false");
+        startBar();
+      };
+
+      window.hideLoading = function () {
+        overlay.style.display = "none";
+        overlay.setAttribute("aria-hidden", "true");
+        stopBar();
+      };
+
+      // Hide overlay on back/forward cache restore
+      window.addEventListener("pageshow", () => window.hideLoading());
+
+      // Optional: auto-disable submit buttons on any form submit (prevents double clicks)
+      document.addEventListener("submit", function (e) {
+        const form = e.target;
+        if (!form || !form.querySelector) return;
+        const btn = form.querySelector('button[type="submit"], input[type="submit"]');
+        if (btn) {
+          btn.disabled = true;
+          btn.dataset._oldText = btn.textContent || "";
+          if (btn.textContent) btn.textContent = "Working…";
+        }
+      }, true);
+    })();
+  </script>
+
+  <footer>
     <p>&copy; 2025 DK Lineup Studio. All rights reserved.</p>
     <p>Optimized for NFL, NBA, NHL DraftKings DFS creators (including Showdown).</p>
   </footer>
