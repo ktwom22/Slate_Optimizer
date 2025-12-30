@@ -7,23 +7,20 @@ https://docs.google.com/spreadsheets/d/e/2PACX-1vTJOqq7cId7F4U7QmfyXR8yMb6wc88PV
 DK NHL Classic roster:
 C, C, W, W, W, D, D, G, UTIL  (Salary cap 50k)
 
-Built around your “Perfect Lineups” insights:
-- Strong preference for TEAM stacks:
-  - Default: Force at least one 3-player team stack
-  - Plus: Force a second 2-player stack (different team) when feasible (3-2)
-  - Falls back to 2-2 / 2-2-2 / single 3-stack with feasibility ladder
-- Position-stack preference on stacked team:
-  - Bias toward C+D and G+RW style correlations by bonus terms
+Now supports EXACT stack types selected by user:
+- Examples: 3-2-2 (recommended small slates), 4-3, 3-3-2, 2-2-2, 3-2, 2-2, etc.
+- Stack logic applies to SKATERS ONLY (C/W/D/UTIL skaters). Goalie is excluded from stack counts.
+- "Exact stack" means: those stack team skater counts are exact, and all other teams max 1 skater.
+
+Diversity:
 - Uniqueness across lineups (min_unique)
 - Randomness to diversify
-- Optional: cap per-team exposure across lineups
-- Optional: limit goalies vs opposing skaters (if OPP exists)
 
 Install:
   pip install pandas requests pulp
 
 Run:
-  python -u nhl_optimizer.py --num_lineups 20
+  python -u nhl_optimizer.py --num_lineups 20 --stack_type 3-2-2
 
 Exposes:
   generate_nhl_df(...) -> pandas DataFrame (DK-style output columns)
@@ -236,6 +233,31 @@ def eligible_slots(pos: str) -> Set[str]:
 
 
 # -----------------------------
+# STACK TYPE PARSER
+# -----------------------------
+def parse_stack_type(stack_type: str) -> List[int]:
+    """
+    Accepts "3-2-2" or "3,2,2" or "3 2 2"
+    Returns list[int] like [3,2,2]
+    """
+    if stack_type is None:
+        return []
+    s = str(stack_type).strip()
+    if not s:
+        return []
+    s = s.replace(",", "-").replace(" ", "-")
+    parts = [p for p in s.split("-") if p.strip() != ""]
+    out = []
+    for p in parts:
+        try:
+            out.append(int(p.strip()))
+        except Exception:
+            raise ValueError(f"Invalid stack_type: {stack_type}. Use like '3-2-2'.")
+    out = [x for x in out if x > 0]
+    return out
+
+
+# -----------------------------
 # OPTIMIZER (single lineup)
 # -----------------------------
 def optimize_one_nhl(
@@ -247,16 +269,14 @@ def optimize_one_nhl(
     randomness: float,
     seed: Optional[int],
 
-    # stacking targets (feasibility ladder will relax)
-    require_primary_stack: int,     # 3 => require a 3-stack from one team, 2 => require a 2-stack, 0 => none
-    require_secondary_stack: int,   # 2 => require second team 2-stack (if primary is 3), 0 => none
+    # exact stack on SKATERS ONLY (goalie excluded)
+    stack_counts: List[int],
 
     # optional opp rules
     avoid_goalie_vs_opp_skaters: bool,  # if opp exists
 
-    # correlation bonus weights (not hard rules)
-    bonus_c_d: float,
-    bonus_g_rw: float,
+    # optional bonuses
+    bonus_util_center: float,  # prefer UTIL=C for your insight
 ) -> Optional[List[int]]:
     if seed is not None:
         random.seed(seed)
@@ -296,32 +316,65 @@ def optimize_one_nhl(
     prob += total_salary <= salary_cap, "salary_cap"
     prob += total_salary >= min_salary_spend, "min_salary_spend"
 
-    # team counts (skaters only for stacks, goalies excluded from stacking counts)
-    team_skaters_count: Dict[str, pulp.LpAffineExpression] = {}
-    for t in teams:
-        idxs = [i for i in team_idxs[t] if players[i].pos != "G"]
-        team_skaters_count[t] = pulp.lpSum(selected[i] for i in idxs) if idxs else 0
+    # -----------------------------
+    # EXACT STACK (SKATERS ONLY)
+    # -----------------------------
+    # skaters = everyone except goalie
+    skater_selected = {
+        i: pulp.lpSum(x.get((i, s), 0) for s in DK_SLOTS if s != "G")
+        for i in range(n)
+    }
+    prob += pulp.lpSum(skater_selected[i] for i in range(n)) == 8, "skaters_eq_8"
 
-    # Primary + secondary stack enforcement
-    if require_primary_stack > 0:
-        prim = {t: pulp.LpVariable(f"prim_{t}", cat="Binary") for t in teams}
-        prob += pulp.lpSum(prim[t] for t in teams) == 1, "one_primary_team"
-        M = 9
+    # team skater counts
+    team_skaters_count = {
+        t: pulp.lpSum(skater_selected[i] for i in team_idxs[t])
+        for t in teams
+    }
+
+    if stack_counts:
+        reqs = [r for r in stack_counts if r >= 2]  # stacks are 2+
+        if not reqs:
+            raise ValueError("stack_type must include at least one 2+ stack (e.g., 3-2-2).")
+
+        if sum(reqs) > 8:
+            raise ValueError(f"stack_type {stack_counts} is impossible for NHL skaters (sum > 8).")
+
+        M = 8  # big-M for skater counts
+
+        # assignment vars: a[(t,j)] = 1 if team t is assigned to required stack slot j
+        a = {(t, j): pulp.LpVariable(f"a_{t}_{j}", cat="Binary") for t in teams for j in range(len(reqs))}
+
+        # each required stack slot j assigned to exactly one team
+        for j, req in enumerate(reqs):
+            prob += pulp.lpSum(a[(t, j)] for t in teams) == 1, f"assign_stack_{j}_{req}"
+
+        # each team can be used for at most one stack slot
         for t in teams:
-            prob += team_skaters_count[t] >= require_primary_stack * prim[t], f"prim_lb_{t}"
-            prob += team_skaters_count[t] <= (require_primary_stack + M * (1 - prim[t])), f"prim_ub_{t}"
+            prob += pulp.lpSum(a[(t, j)] for j in range(len(reqs))) <= 1, f"team_one_stackslot_{t}"
 
-        if require_secondary_stack > 0:
-            sec = {t: pulp.LpVariable(f"sec_{t}", cat="Binary") for t in teams}
-            prob += pulp.lpSum(sec[t] for t in teams) == 1, "one_secondary_team"
-            for t in teams:
-                prob += sec[t] <= 1 - prim[t], f"sec_not_primary_{t}"
-                prob += team_skaters_count[t] >= require_secondary_stack * sec[t], f"sec_lb_{t}"
-                prob += team_skaters_count[t] <= (require_secondary_stack + M * (1 - sec[t])), f"sec_ub_{t}"
+        # if team assigned to slot, enforce exact count
+        for t in teams:
+            for j, req in enumerate(reqs):
+                prob += team_skaters_count[t] - req <= M * (1 - a[(t, j)]), f"stack_eq_ub_{t}_{j}"
+                prob += req - team_skaters_count[t] <= M * (1 - a[(t, j)]), f"stack_eq_lb_{t}_{j}"
 
+        # teams not assigned are one-offs (<=1 skater)
+        for t in teams:
+            prob += team_skaters_count[t] <= 1 + M * pulp.lpSum(a[(t, j)] for j in range(len(reqs))), f"oneoff_cap_{t}"
+
+    # -----------------------------
+    # Uniqueness vs previous lineups
+    # -----------------------------
+    if previous_lineups and min_unique_vs_previous > 0:
+        max_overlap = LINEUP_SIZE - min_unique_vs_previous
+        for li, prev in enumerate(previous_lineups, start=1):
+            prob += pulp.lpSum(selected[i] for i in prev) <= max_overlap, f"uniq_prev_{li}"
+
+    # -----------------------------
     # goalie vs opposing skaters avoidance (if OPP exists)
+    # -----------------------------
     if avoid_goalie_vs_opp_skaters:
-        # pick goalie team binary
         goalie_team = {t: pulp.LpVariable(f"goalie_{t}", cat="Binary") for t in teams}
         for t in teams:
             g_idxs = [i for i in team_idxs[t] if players[i].pos == "G"]
@@ -330,41 +383,25 @@ def optimize_one_nhl(
             else:
                 prob += goalie_team[t] == 0, f"goalie_team_eq_{t}"
 
-        # if goalie from team A has opp B, then limit skaters from B (soft cap 2)
+        # if goalie team has opp, limit skaters from that opp (hard cap 2)
         for t in teams:
-            # find an opp for team t if any player has it
             opp = ""
             for i in team_idxs[t]:
                 if players[i].opp:
                     opp = players[i].opp
                     break
             if opp and opp in team_skaters_count:
-                prob += team_skaters_count[opp] <= 2 + 9 * (1 - goalie_team[t]), f"goalie_avoids_opp_{t}_vs_{opp}"
+                prob += team_skaters_count[opp] <= 2 + 8 * (1 - goalie_team[t]), f"goalie_avoids_opp_{t}_vs_{opp}"
 
-    # objective with noise + bonuses
+    # -----------------------------
+    # objective with noise + UTIL=C preference
+    # -----------------------------
     noise = [random.uniform(-randomness, randomness) for _ in range(n)] if randomness > 0 else [0.0] * n
     base = pulp.lpSum((players[i].proj + noise[i]) * selected[i] for i in range(n))
 
-    # C + D correlation bonus (prefer at least one C and one D from same team)
-    bonus = 0
-    for t in teams:
-        c_t = pulp.lpSum(selected[i] for i in team_idxs[t] if players[i].pos == "C")
-        d_t = pulp.lpSum(selected[i] for i in team_idxs[t] if players[i].pos == "D")
-        # binary indicator via "min" linearization
-        y_cd = pulp.LpVariable(f"y_cd_{t}", cat="Binary")
-        prob += c_t >= y_cd, f"cd_c_{t}"
-        prob += d_t >= y_cd, f"cd_d_{t}"
-        bonus += bonus_c_d * y_cd
-
-    # G + RW correlation proxy: we don't have RW/LW separately (often just W),
-    # so we approximate: goalie + at least one W from same team.
-    for t in teams:
-        g_t = pulp.lpSum(selected[i] for i in team_idxs[t] if players[i].pos == "G")
-        w_t = pulp.lpSum(selected[i] for i in team_idxs[t] if players[i].pos == "W")
-        y_gw = pulp.LpVariable(f"y_gw_{t}", cat="Binary")
-        prob += g_t >= y_gw, f"gw_g_{t}"
-        prob += w_t >= y_gw, f"gw_w_{t}"
-        bonus += bonus_g_rw * y_gw
+    # UTIL=C bonus (your insight: C used in UTIL a lot)
+    util_c = pulp.lpSum(x.get((i, "UTIL"), 0) for i in range(n) if players[i].pos == "C")
+    bonus = bonus_util_center * util_c
 
     prob += base + bonus, "objective"
 
@@ -435,7 +472,7 @@ def lineups_to_df(players: List[Player], built: List[List[int]]) -> pd.DataFrame
 
 
 # -----------------------------
-# BUILD MANY LINEUPS (with ladder)
+# BUILD MANY LINEUPS
 # -----------------------------
 def generate_nhl_df(
     num_lineups: int = 20,
@@ -446,71 +483,49 @@ def generate_nhl_df(
     csv_url: Optional[str] = None,
     seed: Optional[int] = 7,
     avoid_goalie_vs_opp_skaters: bool = True,
+    stack_type: str = "3-2-2",
     verbose: bool = False,
 ) -> pd.DataFrame:
     url = csv_url or CSV_URL_DEFAULT
     df = fetch_csv_to_df(url)
     players = parse_players(df, verbose=verbose)
 
-    # Feasibility ladder based on your stack tendencies:
-    # Start with 3-2 (primary 3, secondary 2), then relax to 2-2, then 2-2-2-ish,
-    # then just "at least 2 stack", then no stack.
-    ladder = [
-        # (primary_stack, secondary_stack, min_unique, min_sal, bonus_cd, bonus_gw)
-        (3, 2, min_unique, min_salary_spend, 0.80, 0.25),             # 3-2 stack + C/D preference
-        (2, 2, min_unique, min_salary_spend, 0.70, 0.20),             # 2-2 stack
-        (3, 0, max(0, min_unique - 1), min_salary_spend, 0.70, 0.20), # single 3-stack
-        (2, 0, max(0, min_unique - 1), max(45000, min_salary_spend - 1500), 0.60, 0.15),
-        (0, 0, max(0, min_unique - 2), max(44000, min_salary_spend - 2500), 0.40, 0.10),
-    ]
+    stack_counts = parse_stack_type(stack_type)
 
     built: List[List[int]] = []
     prev_sets: List[Set[int]] = []
 
-    for prim, sec, uniq, min_sal, b_cd, b_gw in ladder:
-        built = []
-        prev_sets = []
-        ok = True
+    for li in range(num_lineups):
+        lineup = None
+        solves = 0
+        while solves < MAX_SOLVES_PER_LINEUP and lineup is None:
+            solves += 1
+            lineup = optimize_one_nhl(
+                players=players,
+                salary_cap=salary_cap,
+                min_salary_spend=min_salary_spend,
+                min_unique_vs_previous=min_unique,
+                previous_lineups=prev_sets,
+                randomness=randomness + (0.12 * (solves - 1)),
+                seed=None if seed is None else seed + li * 10 + solves,
+                stack_counts=stack_counts,
+                avoid_goalie_vs_opp_skaters=avoid_goalie_vs_opp_skaters,
+                bonus_util_center=0.35,  # tune this if you want stronger UTIL=C push
+            )
 
-        for li in range(num_lineups):
-            lineup = None
-            solves = 0
-            while solves < MAX_SOLVES_PER_LINEUP and lineup is None:
-                solves += 1
-                lineup = optimize_one_nhl(
-                    players=players,
-                    salary_cap=salary_cap,
-                    min_salary_spend=min_sal,
-                    min_unique_vs_previous=uniq,
-                    previous_lineups=prev_sets,
-                    randomness=randomness + (0.12 * (solves - 1)),
-                    seed=None if seed is None else seed + li * 10 + solves,
-                    require_primary_stack=prim,
-                    require_secondary_stack=sec,
-                    avoid_goalie_vs_opp_skaters=avoid_goalie_vs_opp_skaters,
-                    bonus_c_d=b_cd,
-                    bonus_g_rw=b_gw,
-                )
+        if lineup is None:
+            raise RuntimeError(
+                f"No feasible NHL lineups for stack_type={stack_type}.\n"
+                "Try loosening:\n"
+                "  - lower min_salary_spend (e.g. 45000)\n"
+                "  - set min_unique to 0 or 1\n"
+                "  - increase randomness (1.2)\n"
+                "  - choose a different stack_type\n"
+                "  - set avoid_goalie_vs_opp_skaters=False\n"
+            )
 
-            if lineup is None:
-                ok = False
-                break
-
-            built.append(lineup)
-            prev_sets.append(set(lineup))
-
-        if ok and built:
-            break
-
-    if not built:
-        raise RuntimeError(
-            "No NHL lineups generated.\n"
-            "Try loosening:\n"
-            "  - lower min_salary_spend (e.g. 45000)\n"
-            "  - set min_unique to 0 or 1\n"
-            "  - increase randomness (1.2)\n"
-            "  - set avoid_goalie_vs_opp_skaters=False (if OPP column is unreliable)\n"
-        )
+        built.append(lineup)
+        prev_sets.append(set(lineup))
 
     return lineups_to_df(players, built)
 
@@ -527,6 +542,7 @@ def main():
     ap.add_argument("--min_unique", type=int, default=2)
     ap.add_argument("--randomness", type=float, default=0.9)
     ap.add_argument("--seed", type=int, default=7)
+    ap.add_argument("--stack_type", type=str, default="3-2-2")  # <-- NEW
     ap.add_argument("--no_goalie_opp_rule", action="store_true")
     ap.add_argument("--cbc_msg", action="store_true")
     args = ap.parse_args()
@@ -543,6 +559,7 @@ def main():
         salary_cap=args.salary_cap,
         csv_url=args.csv_url,
         seed=args.seed,
+        stack_type=args.stack_type,
         avoid_goalie_vs_opp_skaters=(not args.no_goalie_opp_rule),
         verbose=True,
     )

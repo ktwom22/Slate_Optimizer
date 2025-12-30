@@ -5,8 +5,8 @@ from flask import Flask, render_template, request, redirect, url_for, flash
 
 import NFL
 import NBA
-import nfl_showdown  # your file: nfl_showdown.py
-import nhl_optimizer as NHL  # <-- your NHL file/module name (change if different)
+import nfl_showdown
+import nhl_optimizer as NHL  # change if your NHL module name differs
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "local-dev")
@@ -53,11 +53,18 @@ def df_to_lineups(df: pd.DataFrame, slots: list[str], meta_fields: dict[str, str
     """
     Expects DK-style columns:
       {SLOT}_name, {SLOT}_team, {SLOT}_salary, {SLOT}_proj
+
+    Optional (if present):
+      {SLOT}_own_pct  -> float (0-100)
+      {SLOT}_is_chalk -> int (0/1)
+      {SLOT}_is_sneaky-> int (0/1)
+
+    Also supports optional lineup-level columns in meta_fields (like team_counts, chalk_ct, etc.)
     """
     if df is None or df.empty:
         raise RuntimeError("Generator returned no lineups (empty DataFrame).")
 
-    # validate first slot columns exist
+    # validate the generator output has the base required columns
     s0 = slots[0]
     needed = [f"{s0}_name", f"{s0}_team", f"{s0}_salary", f"{s0}_proj"]
     missing = [c for c in needed if c not in df.columns]
@@ -66,6 +73,11 @@ def df_to_lineups(df: pd.DataFrame, slots: list[str], meta_fields: dict[str, str
             f"Generator output missing required DK-style columns for {s0}: {missing}\n"
             f"Found columns: {list(df.columns)}"
         )
+
+    # detect optional player-level fields by checking the first slot
+    has_own = f"{s0}_own_pct" in df.columns
+    has_chalk = f"{s0}_is_chalk" in df.columns
+    has_sneaky = f"{s0}_is_sneaky" in df.columns
 
     lineups = []
     for _, row in df.iterrows():
@@ -80,27 +92,44 @@ def df_to_lineups(df: pd.DataFrame, slots: list[str], meta_fields: dict[str, str
             sal = _safe_int(row.get(f"{s}_salary", 0))
             proj = _safe_float(row.get(f"{s}_proj", 0.0))
 
-            rows.append({"pos": s, "player": pname, "team": team, "salary": sal, "proj": proj})
+            r = {"pos": s, "player": pname, "team": team, "salary": sal, "proj": proj}
+
+            # optional per-player ownership/chalk/sneaky
+            if has_own:
+                r["own"] = _safe_float(row.get(f"{s}_own_pct", 0.0), 0.0)
+            if has_chalk:
+                r["chalk"] = _safe_int(row.get(f"{s}_is_chalk", 0), 0)
+            if has_sneaky:
+                r["sneaky"] = _safe_int(row.get(f"{s}_is_sneaky", 0), 0)
+
+            rows.append(r)
+
             total_salary += sal
             total_proj += proj
 
             if team:
                 team_usage[team] = team_usage.get(team, 0) + 1
 
-        stack_template = "-".join(str(count) for count in sorted(team_usage.values(), reverse=True))
+        stack_template = "-".join(str(count) for count in sorted(team_usage.values(), reverse=True)) if team_usage else ""
 
         meta = {}
         for k, col in meta_fields.items():
-            meta[k] = str(row.get(col, "")) if col in df.columns else ""
+            meta[k] = row.get(col, "") if col in df.columns else ""
 
+        # always include basic stack summary in meta
         meta["stack_template"] = stack_template
         meta["team_usage"] = team_usage
+
+        # include flags so template can render columns safely
+        meta["has_own"] = has_own
+        meta["has_chalk"] = has_chalk
+        meta["has_sneaky"] = has_sneaky
 
         lineups.append({
             "rows": rows,
             "total_salary": total_salary,
             "total_proj": round(total_proj, 2),
-            "meta": meta
+            "meta": meta,
         })
 
     return lineups
@@ -133,7 +162,6 @@ def nfl():
         randomness = max(0.0, min(_safe_float(request.form.get("randomness", "1.0"), 1.0), 3.0))
 
         gen = _require_fn(NFL, "generate_nfl_df")
-
         df = gen(
             num_lineups=num_lineups,
             min_unique=min_unique,
@@ -142,7 +170,7 @@ def nfl():
         ).head(num_lineups)
 
         slots = ["QB", "RB1", "RB2", "WR1", "WR2", "WR3", "TE", "FLEX", "DST"]
-        meta_fields = {"note": "note", "total_proj": "total_proj"}  # optional
+        meta_fields = {"note": "note", "total_proj": "total_proj"}
         lineups = df_to_lineups(df, slots, meta_fields)
 
         return render_template("results.html", title="NFL Lineups", lineups=lineups, back_url=url_for("nfl"))
@@ -162,17 +190,25 @@ def nba():
         min_salary = max(0, _safe_int(request.form.get("min_salary", "49500"), 49500))
         randomness = max(0.0, min(_safe_float(request.form.get("randomness", "0.8"), 0.8), 3.0))
 
-        gen = _require_fn(NBA, "generate_nba_df")
+        # optional contest type (if you add it to the form)
+        contest_type = request.form.get("contest_type", "gpp_large")
 
+        gen = _require_fn(NBA, "generate_nba_df")
         df = gen(
             num_lineups=num_lineups,
             min_unique=min_unique,
             min_salary_spend=min_salary,
             randomness=randomness,
+            contest_type=contest_type,
         ).head(num_lineups)
 
         slots = ["PG", "SG", "SF", "PF", "C", "G", "F", "UTIL"]
-        meta_fields = {"stack": "team_counts"}
+        meta_fields = {
+            "stack": "team_counts",
+            "chalk_ct": "chalk_ct",
+            "sneaky_ct": "sneaky_ct",
+            "contest_type": "contest_type",
+        }
         lineups = df_to_lineups(df, slots, meta_fields)
 
         return render_template("results.html", title="NBA Lineups", lineups=lineups, back_url=url_for("nba"))
@@ -192,30 +228,16 @@ def nfl_showdown_route():
         min_salary = max(0, _safe_int(request.form.get("min_salary", "48000"), 48000))
         randomness = max(0.0, min(_safe_float(request.form.get("randomness", "1.0"), 1.0), 3.0))
 
-        # Optional: max salary (only passed if provided)
-        max_salary = None
-        max_salary_raw = request.form.get("max_salary", "")
-        if str(max_salary_raw).strip() != "":
-            ms = _safe_int(max_salary_raw, -1)
-            if ms > 0:
-                max_salary = ms
-
         gen = _require_fn(nfl_showdown, "generate_nfl_showdown_df")
-
-        # Build kwargs safely so it won't crash if your generator doesn't accept max_salary_spend
-        kwargs = dict(
+        df = gen(
             num_lineups=num_lineups,
             min_unique=min_unique,
             min_salary_spend=min_salary,
             randomness=randomness,
-        )
-        if max_salary is not None:
-            kwargs["max_salary_spend"] = max_salary
-
-        df = gen(**kwargs).head(num_lineups)
+        ).head(num_lineups)
 
         slots = ["CPT", "FLEX1", "FLEX2", "FLEX3", "FLEX4", "FLEX5"]
-        meta_fields = {}  # optional
+        meta_fields = {}
         lineups = df_to_lineups(df, slots, meta_fields)
 
         return render_template(
@@ -229,9 +251,6 @@ def nfl_showdown_route():
         return _error("NFL Showdown /nfl_showdown", e, "nfl_showdown_route")
 
 
-# -----------------------------
-# NEW: NHL route
-# -----------------------------
 @app.route("/nhl", methods=["GET", "POST"])
 def nhl():
     if request.method == "GET":
@@ -244,7 +263,6 @@ def nhl():
         randomness = max(0.0, min(_safe_float(request.form.get("randomness", "1.0"), 1.0), 3.0))
 
         gen = _require_fn(NHL, "generate_nhl_df")
-
         df = gen(
             num_lineups=num_lineups,
             min_unique=min_unique,
@@ -252,9 +270,8 @@ def nhl():
             randomness=randomness,
         ).head(num_lineups)
 
-        # IMPORTANT: your NHL generator should output DK-style columns for these slots
         slots = ["C1", "C2", "W1", "W2", "W3", "D1", "D2", "G", "UTIL"]
-        meta_fields = {"stack": "team_counts", "stack_template": "stack_template"}  # optional
+        meta_fields = {"stack": "team_counts", "stack_template": "stack_template"}
         lineups = df_to_lineups(df, slots, meta_fields)
 
         return render_template("results.html", title="NHL Lineups", lineups=lineups, back_url=url_for("nhl"))

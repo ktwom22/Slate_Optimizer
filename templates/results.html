@@ -3,8 +3,8 @@
 
 <!-- SEO Metadata -->
 <title>{{ title }} | DraftKings Lineup Results Viewer</title>
-<meta name="description" content="View your DraftKings-style NFL and NBA lineup results. Analyze lineups by position, player, team, salary, and projected points.">
-<meta name="keywords" content="lineup results, NFL lineup viewer, NBA lineup viewer, DraftKings lineups, DFS optimizer, fantasy sports lineups">
+<meta name="description" content="View your DraftKings-style NFL and NBA lineup results. Analyze lineups by position, player, team, salary, projected points, and projected ownership tiers.">
+<meta name="keywords" content="lineup results, NFL lineup viewer, NBA lineup viewer, DraftKings lineups, DFS optimizer, fantasy sports lineups, projected ownership, chalk, sneaky">
 
 <div class="card" style="margin-top:18px;">
   <!-- Header Section -->
@@ -12,7 +12,7 @@
     <div>
       <h1>{{ title }}</h1>
       <p>Review your generated DraftKings-style lineups with detailed metrics for each player.</p>
-      <p>🚀 **Columns Included**: Position, Player Name, Team, Salary, and Projected Points</p>
+      <p>🚀 Columns: Position, Player, Team, Salary, Projected Points{% if lineups and lineups[0].meta and lineups[0].meta.has_own %}, Projected Ownership, Chalk/Sneaky{% endif %}</p>
     </div>
     <div style="display:flex; gap:10px; flex-wrap:wrap;">
       <a class="btn secondary" href="{{ back_url }}" title="Go back to the previous page">Back</a>
@@ -37,11 +37,26 @@
                 <div class="lineup-meta">
                   <span class="badge good">Salary <span class="mono">${{ "{:,}".format(l.total_salary) }}</span></span>
                   <span class="badge good">Projected Points <span class="mono">{{ "%.2f"|format(l.total_proj) }}</span></span>
+
+                  {% if l.meta and l.meta.contest_type %}
+                    <span class="badge blue" title="Contest profile used">Type <span class="mono">{{ l.meta.contest_type }}</span></span>
+                  {% endif %}
+
+                  {% if l.meta and l.meta.chalk_ct is not none %}
+                    <span class="badge" title="Number of chalk plays in lineup">Chalk <span class="mono">{{ l.meta.chalk_ct }}</span></span>
+                  {% endif %}
+                  {% if l.meta and l.meta.sneaky_ct is not none %}
+                    <span class="badge" title="Number of low-owned plays in lineup">Sneaky <span class="mono">{{ l.meta.sneaky_ct }}</span></span>
+                  {% endif %}
+
                   {% if l.meta and l.meta.template %}
                     <span class="badge blue" title="Template used for this lineup">Template <span class="mono">{{ l.meta.template }}</span></span>
                   {% endif %}
                   {% if l.meta and l.meta.stack %}
                     <span class="badge" title="Stacking strategy used for this lineup">Stack <span class="mono">{{ l.meta.stack }}</span></span>
+                  {% endif %}
+                  {% if l.meta and l.meta.stack_template %}
+                    <span class="badge" title="Derived stack breakdown from teams in lineup">Teams <span class="mono">{{ l.meta.stack_template }}</span></span>
                   {% endif %}
                 </div>
               </div>
@@ -56,6 +71,13 @@
                     <th style="width:84px;">Team</th>
                     <th style="width:120px;">Salary</th>
                     <th style="width:160px;">Projected Points</th>
+
+                    {% if l.meta and l.meta.has_own %}
+                      <th style="width:140px;">Proj Own%</th>
+                    {% endif %}
+                    {% if l.meta and (l.meta.has_chalk or l.meta.has_sneaky) %}
+                      <th style="width:140px;">Tier</th>
+                    {% endif %}
                   </tr>
                 </thead>
                 <tbody>
@@ -66,6 +88,27 @@
                       <td class="mono" title="Player's team">{{ r.team }}</td>
                       <td class="mono" title="Player salary">${{ "{:,}".format(r.salary) }}</td>
                       <td class="mono" title="Projected points">{{ "%.2f"|format(r.proj) }}</td>
+
+                      {% if l.meta and l.meta.has_own %}
+                        <td class="mono" title="Projected ownership percentage">
+                          {{ "%.1f"|format(r.own if r.own is defined else 0.0) }}%
+                        </td>
+                      {% endif %}
+
+                      {% if l.meta and (l.meta.has_chalk or l.meta.has_sneaky) %}
+                        <td title="Chalk/Sneaky tier">
+                          {% set c = (r.chalk if r.chalk is defined else 0) %}
+                          {% set s = (r.sneaky if r.sneaky is defined else 0) %}
+
+                          {% if c == 1 %}
+                            <span class="badge good">Chalk</span>
+                          {% elif s == 1 %}
+                            <span class="badge blue">Sneaky</span>
+                          {% else %}
+                            <span class="badge">Mid</span>
+                          {% endif %}
+                        </td>
+                      {% endif %}
                     </tr>
                   {% endfor %}
                 </tbody>
