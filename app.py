@@ -7,6 +7,7 @@ import NFL
 import NBA
 import nfl_showdown
 import nhl_optimizer as NHL  # change if your NHL module name differs
+import nhl_showdown as NHLSD  # make sure this import exists at the top
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "local-dev")
@@ -278,6 +279,50 @@ def nhl():
 
     except Exception as e:
         return _error("NHL /nhl", e, "nhl")
+
+
+@app.route("/nhl_showdown", methods=["GET", "POST"])
+def nhl_showdown_route():
+    if request.method == "GET":
+        return render_template("nhl_showdown.html", title="NHL Showdown (DK)")
+
+    try:
+        num_lineups = max(1, min(_safe_int(request.form.get("num_lineups", "20"), 20), 150))
+        min_unique = max(0, min(_safe_int(request.form.get("min_unique", "2"), 2), 8))
+        min_salary = max(0, _safe_int(request.form.get("min_salary", "48000"), 48000))
+        randomness = max(0.0, min(_safe_float(request.form.get("randomness", "1.0"), 1.0), 3.0))
+        contest_type = (request.form.get("contest_type", "gpp_large") or "gpp_large").strip().lower()
+
+        gen = _require_fn(NHLSD, "generate_nhl_showdown_df")
+
+        df = gen(
+            num_lineups=num_lineups,
+            min_unique=min_unique,
+            min_salary_spend=min_salary,
+            randomness=randomness,
+            contest_type=contest_type,
+        ).head(num_lineups)
+
+        slots = ["CPT", "FLEX1", "FLEX2", "FLEX3", "FLEX4", "FLEX5"]
+        meta_fields = {
+            "contest_type": "contest_type",
+            "chalk_ct": "chalk_ct",
+            "sneaky_ct": "sneaky_ct",
+            "stack": "team_counts",
+        }
+
+        lineups = df_to_lineups(df, slots, meta_fields)
+
+        return render_template(
+            "results.html",
+            title="NHL Showdown Lineups",
+            lineups=lineups,
+            back_url=url_for("nhl_showdown_route"),
+            csv_path="nhl_showdown",
+        )
+
+    except Exception as e:
+        return _error("NHL Showdown /nhl_showdown", e, "nhl_showdown_route")
 
 
 if __name__ == "__main__":

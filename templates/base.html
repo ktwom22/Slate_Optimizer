@@ -370,6 +370,10 @@
 
         <a class="pill {% if request.path.startswith('/nhl') %}active{% endif %}"
            href="{{ url_for('nhl') }}">NHL</a>
+
+        <a class="pill {% if request.path.startswith('/nhl_showdown') %}active{% endif %}"
+           href="{{ url_for('nhl_showdown_route') }}">NHL Showdown</a>
+
       </div>
     </div>
 
