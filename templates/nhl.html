@@ -2,178 +2,35 @@
 {% block content %}
 
 <!-- SEO Metadata -->
-<title>NHL DraftKings Lineup Optimizer | Build NHL DFS Stacks</title>
-<meta name="description" content="Generate optimized NHL DraftKings DFS lineups with smart stacking (like 3-2-2 for small slates), salary constraints, and lineup diversity." />
-<meta name="keywords" content="NHL lineup optimizer, DraftKings NHL optimizer, NHL DFS stacks, 3-2-2 stack, fantasy hockey, DFS lineup builder" />
+<title>NHL DraftKings Lineup Optimizer | Fantasy Hockey DFS Tool</title>
+<meta name="description" content="Generate optimized NHL lineups for DraftKings DFS contests. Customize minimum salary constraints, player uniqueness, and randomness to build winning hockey lineups.">
+<meta name="keywords" content="NHL lineup optimizer, DraftKings NHL, DFS optimizer, fantasy hockey generator, lineup optimization, NHL DFS strategy, lineup diversity">
 
-<style>
-  /* Page-level helpers that match your theme */
-  .grid.two{ display:grid; grid-template-columns: 1.15fr .85fr; gap:16px; margin-top:16px; }
-  @media (max-width: 980px){ .grid.two{ grid-template-columns:1fr; } }
-
-  .card{
-    border:1px solid var(--line);
-    border-radius: var(--radius);
-    background: linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.02));
-    box-shadow: var(--shadow);
-    overflow:hidden;
-  }
-  .card-h{
-    padding:16px 16px 12px;
-    border-bottom:1px solid var(--line);
-    display:flex;
-    align-items:flex-start;
-    justify-content:space-between;
-    gap:14px;
-  }
-  .card-h h1, .card-h h2{ margin:0; }
-  .card-h p{ margin:6px 0 0; color:var(--muted); font-size:13px; }
-  .badge{
-    font-size:12px;
-    padding:6px 10px;
-    border-radius:999px;
-    border:1px solid rgba(34,197,94,.35);
-    background: rgba(34,197,94,.10);
-    color:#c8ffd8;
-    white-space:nowrap;
-  }
-
-  .card-b{ padding:16px; }
-
-  .form{ display:flex; flex-direction:column; gap:14px; }
-  .row2{ display:grid; grid-template-columns: 1fr 1fr; gap:12px; }
-  @media (max-width: 700px){ .row2{ grid-template-columns:1fr; } }
-
-  label{ display:block; font-size:13px; font-weight:700; margin-bottom:6px; }
-  .hint{ display:block; font-size:12px; color:var(--muted); font-weight:500; margin-top:4px; }
-
-  input, select{
-    width:100%;
-    padding:12px 12px;
-    border-radius:12px;
-    border:1px solid var(--line);
-    background: rgba(0,0,0,.18);
-    color: var(--text);
-    outline:none;
-  }
-  input:focus, select:focus{
-    border-color: rgba(59,130,246,.75);
-    box-shadow: 0 0 0 3px rgba(59,130,246,.15);
-  }
-
-  .toolbar{
-    display:flex;
-    gap:10px;
-    flex-wrap:wrap;
-    align-items:center;
-    padding:12px;
-    border-radius:14px;
-    border:1px solid var(--line);
-    background: rgba(255,255,255,.03);
-  }
-  .toolbar .chip{
-    font-size:12px;
-    padding:7px 10px;
-    border-radius:999px;
-    border:1px solid var(--line);
-    color:var(--muted);
-  }
-
-  .btn{
-    width:100%;
-    padding:12px 14px;
-    border-radius:14px;
-    border:1px solid rgba(59,130,246,.5);
-    background: linear-gradient(180deg, rgba(59,130,246,.35), rgba(59,130,246,.18));
-    color: var(--text);
-    font-weight:800;
-    letter-spacing:.2px;
-    cursor:pointer;
-    transition:.15s ease;
-  }
-  .btn:hover{ transform: translateY(-1px); border-color: rgba(59,130,246,.85); }
-
-  .note{
-    margin-top:10px;
-    padding:12px 12px;
-    border-radius:14px;
-    border:1px solid rgba(245,158,11,.35);
-    background: rgba(245,158,11,.10);
-    color:#ffe9c2;
-    font-size:13px;
-  }
-
-  .mini{
-    color:var(--muted);
-    font-size:12px;
-    line-height:1.4;
-  }
-  .mini b{ color: var(--text); }
-</style>
-
+<!-- Main Content -->
 <div class="grid two">
-
   <!-- NHL Generator Form -->
   <div class="card">
     <div class="card-h">
-      <div>
-        <h1>NHL Lineup Generator</h1>
-        <p>Build DraftKings NHL lineups with stacking rules and strong diversity controls.</p>
-      </div>
-      <div class="badge">Recommended: Small slates → 3-2-2</div>
+      <h1>NHL Lineup Generator</h1>
+      <p>Create competitive NHL DraftKings lineups using advanced optimization settings like salary constraints, randomness, and lineup diversity.</p>
     </div>
-
     <div class="card-b">
-      <div class="toolbar">
-        <span class="chip">Slots: C, C, W, W, W, D, D, G, UTIL</span>
-        <span class="chip">Diversity: min unique + randomness</span>
-        <span class="chip">Stacks: pick your build</span>
-      </div>
-
       <form class="form" method="POST">
-
-        <div class="row2">
-          <div>
-            <label>Slate Size</label>
-            <select name="slate_size" title="Choose slate size to apply recommended stack logic">
-              <option value="small" selected>Small (3–6 games) — 3-2-2 recommended</option>
-              <option value="medium">Medium (7–10 games)</option>
-              <option value="large">Large (11+ games)</option>
-            </select>
-            <span class="hint">We’ll recommend the best stack profile based on slate size.</span>
-          </div>
-
-          <div>
-            <label>Stack Type</label>
-            <select name="stack_type" title="Choose a team stack pattern">
-              <option value="3-2-2" selected>3-2-2 (most common perfect lineup on small slates)</option>
-              <option value="2-2-2">2-2-2</option>
-              <option value="3-2">3-2</option>
-              <option value="2-2">2-2</option>
-              <option value="4-3">4-3</option>
-              <option value="3-3-2">3-3-2</option>
-            </select>
-            <span class="hint">For 3–6 game slates, your data shows 3-2-2 was optimal most often.</span>
-          </div>
-        </div>
-
         <div class="row2">
           <div>
             <label>
               Number of Lineups
-              <span class="hint">How many lineups you want to generate</span>
+              <span class="hint">Set how many lineups to generate</span>
             </label>
-            <input name="num_lineups" type="number" min="1" max="150" value="20"
-              title="Enter the number of NHL lineups to generate" />
+            <input name="num_lineups" type="number" min="1" max="150" value="20" title="Enter the total number of DraftKings lineups to generate" />
           </div>
 
           <div>
             <label>
               Minimum Salary Spend
-              <span class="hint">Leave salary on the table for uniqueness (common in showdown/short slates too)</span>
+              <span class="hint">Set the minimum total salary for each DraftKings lineup</span>
             </label>
-            <input name="min_salary" type="number" min="0" max="50000" value="47500"
-              title="Enter the minimum total salary for your NHL lineup" />
+            <input name="min_salary" type="number" min="0" max="50000" value="49000" title="Set the minimum salary spend for each generated NHL lineup" />
           </div>
         </div>
 
@@ -181,53 +38,51 @@
           <div>
             <label>
               Minimum Unique Players
-              <span class="hint">Higher = more variety, may reduce feasibility</span>
+              <span class="info" data-tip="The minimum number of unique players required between lineups. Higher values lead to lineup variety but can reduce feasibility.">i</span>
             </label>
-            <input name="min_unique" type="number" min="0" max="8" value="2"
-              title="Set the minimum number of unique players between lineups" />
+            <input name="min_unique" type="number" min="0" max="8" value="2" title="Define the minimum number of unique players between lineups" />
           </div>
 
           <div>
             <label>
               Randomness
-              <span class="hint">Adds noise to projections to create more varied builds (suggested 0.8–1.4)</span>
+              <span class="info" data-tip="Adds random adjustments to player projections to increase lineup diversity. Recommended values range between 0.4 and 1.0.">i</span>
             </label>
-            <input name="randomness" type="number" step="0.1" min="0" max="3" value="1.0"
-              title="Add randomness to player projections to vary NHL lineups" />
+            <input name="randomness" type="number" step="0.1" min="0" max="3" value="0.8" title="Set randomness for generating diverse lineups" />
           </div>
         </div>
+            <label>Contest Type</label>
+            <select name="contest_type">
+              <option value="SE">Single Entry</option>
+              <option value="3MAX">3-Max</option>
+              <option value="20MAX" selected>20-Max</option>
+              <option value="150MAX">150-Max</option>
+            </select>
 
-        <button class="btn" type="submit" title="Generate your NHL lineups">Generate NHL Lineups</button>
-
-        <div class="note">
-          🧊 <b>Small-slate edge:</b> Your last-30 perfect-lineup study showed <b>3-2-2 stacks</b> were optimal ~<b>46%</b> of the time,
-          and <b>UTIL = C</b> showed up ~<b>44–46%</b>.
+        <button class="btn" type="submit" title="Generate your NHL DraftKings lineups">Generate NHL Lineups</button>
+        <div class="footer-note">
+          🏒 **Tip:** This generator parses NHL output from your script. Ensure the script is formatted properly for smooth processing.
         </div>
-
       </form>
     </div>
   </div>
 
-  <!-- Notes / Help -->
+  <!-- Notes Section -->
   <div class="card">
     <div class="card-h">
-      <div>
-        <h2>What you’ll see</h2>
-        <p>Output is the same “results.html” format you already use.</p>
-      </div>
+      <h2>Formatting Tips</h2>
+      <p>How to ensure lineups are processed correctly:</p>
     </div>
     <div class="card-b">
-      <div class="mini">
-        <ul style="margin:0; padding-left:18px;">
-          <li>Each lineup lists: <b>POS / Player / Team / Salary / Projection</b></li>
-          <li>Header includes <b>Total Salary</b> and <b>Total Projected Points</b></li>
-          <li>Meta shows a stack template like <b>3-2-2</b> and team counts</li>
-          <li>If a slate is tight, lower <b>Min Salary</b> or <b>Min Unique</b>, or raise <b>Randomness</b></li>
-        </ul>
+      <div class="badge">Expected Output Row Format</div>
+      <div class="footer-note" style="margin-top:10px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;">
+        C1  Player Name  TEAM  C/W  $8400 proj:18.73
+      </div>
+      <div class="footer-note">
+        If your NHL script outputs lineups in unfamiliar formats, paste one of your rows or blocks, and I’ll adjust the lineup parser to match it.
       </div>
     </div>
   </div>
-
 </div>
 
 {% endblock %}
