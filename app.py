@@ -16,14 +16,16 @@ import nhl_optimizer as NHL  # change if your NHL module name differs
 
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'dev-key-123' # Change this for security later
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///users.db'
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+load_dotenv()
 
+# --- DATABASE CONFIG ---
 basedir = os.path.abspath(os.path.dirname(__file__))
+# Force the DB to a fixed absolute path
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(basedir, 'users.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.config['SECRET_KEY'] = os.getenv("FLASK_SECRET_KEY", "dev-key-123")
 
+db = SQLAlchemy(app)
 # 1. Load the variables from .env
 load_dotenv()
 
@@ -56,6 +58,10 @@ class User(UserMixin, db.Model):
             return True
         return False
 
+# --- NOW CREATE THE TABLES ---
+with app.app_context():
+    db.create_all()
+    print(f"Database initialized at: {os.path.join(basedir, 'users.db')}")
 
 # 1. This function MUST come before the routes
 def pro_required(f):
