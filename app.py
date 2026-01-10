@@ -9,42 +9,28 @@ from functools import wraps
 import stripe
 from dotenv import load_dotenv
 
-import NFL
-import NBA
-import nfl_showdown
-import nhl_optimizer as NHL  # change if your NHL module name differs
-
-
+# 1. Initialize App and Load Env
 app = Flask(__name__)
 load_dotenv()
 
-# --- DATABASE CONFIG ---
+# 2. Database & Stripe Config
 basedir = os.path.abspath(os.path.dirname(__file__))
-# Force the DB to a fixed absolute path
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(basedir, 'users.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['SECRET_KEY'] = os.getenv("FLASK_SECRET_KEY", "dev-key-123")
-
-db = SQLAlchemy(app)
-# 1. Load the variables from .env
-load_dotenv()
-
-# 2. Assign the Secret Key from the .env file to Stripe
 stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
 
-# (Optional) You can also use os.getenv for your Flask Secret Key
-app.secret_key = os.getenv("FLASK_SECRET_KEY", "fallback-if-env-is-missing")
-
+# 3. Initialize DB (Only ONCE)
 db = SQLAlchemy(app)
-# This creates the database tables automatically on Railway
-with app.app_context():
-    db.create_all()
-    print("Database tables created successfully!")
 
-login_manager = LoginManager(app)
-login_manager.login_view = 'login' # Tells Flask where to send users who aren't logged in
+# 4. Import your sports modules AFTER db is defined
+# (This prevents circular import errors if they use 'db')
+import NFL
+import NBA
+import nfl_showdown
+import nhl_optimizer as NHL
 
-# The User Model
+# 5. Define User Model
 class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=False)
@@ -53,16 +39,23 @@ class User(UserMixin, db.Model):
     pro_expiry = db.Column(db.DateTime, nullable=True)
 
     def has_access(self):
-        # Returns True only if is_pro is True AND the date hasn't passed
         if self.is_pro and self.pro_expiry and self.pro_expiry > datetime.now():
             return True
         return False
 
-# --- NOW CREATE THE TABLES ---
+# 6. Create Tables
 with app.app_context():
     db.create_all()
-    print(f"Database initialized at: {os.path.join(basedir, 'users.db')}")
 
+# 7. Login Manager
+login_manager = LoginManager(app)
+login_manager.login_view = 'login'
+
+@login_manager.user_loader
+def load_user(user_id):
+    return User.query.get(int(user_id))
+
+# ... rest of your routes ...
 # 1. This function MUST come before the routes
 def pro_required(f):
     @wraps(f)
