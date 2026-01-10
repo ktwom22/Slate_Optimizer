@@ -5,3 +5,5 @@ flask-bcrypt
 stripe
 python-dotenv
 gunicorn
+pandas
+numpy
