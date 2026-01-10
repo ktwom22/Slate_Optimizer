@@ -41,11 +41,6 @@ with app.app_context():
     except Exception as e:
         print(f"⚠️ Connection Note: {e}")
 
-# 5. Import sports modules (Keep this AFTER db.init_app)
-import NFL
-import NBA
-import nfl_showdown
-import nhl_optimizer as NHL
 
 # 4. Import your sports modules AFTER db is defined
 # (This prevents circular import errors if they use 'db')
@@ -476,7 +471,18 @@ def logout():
     logout_user()
     return redirect(url_for('index'))
 
+
+# --- REMOVE db.create_all() from the middle of your file ---
+# --- AND REPLACE the very bottom with this: ---
+
 if __name__ == "__main__":
+    # This only runs once when the main process starts
     with app.app_context():
-        db.create_all()  # This creates the users.db file automatically
-    app.run(debug=True, host='0.0.0.0', port=5001)
+        try:
+            db.create_all()
+            print("✅ Database tables confirmed.")
+        except Exception as e:
+            print(f"Note: Tables already exist or: {e}")
+
+    port = int(os.environ.get("PORT", 8080))
+    app.run(host='0.0.0.0', port=port)
