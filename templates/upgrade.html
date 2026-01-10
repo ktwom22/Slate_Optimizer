@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="hero">
+    <h1>Pro Access Required</h1>
+    <p>Unlock all NFL, NBA, and NHL optimizers until April 1st.</p>
+</div>
+
+<div style="max-width: 450px; margin: 40px auto;">
+    <div class="card" style="border-top: 4px solid #2ecc71;">
+        <div class="card-h" style="text-align: center;">
+            <h2>Upgrade to Pro</h2>
+            <h1 style="color: #2ecc71; margin: 10px 0;">$5.00</h1>
+        </div>
+        <div class="card-b">
+            <p class="muted">You are currently logged in as <strong>{{ current_user.username }}</strong>. Click below to complete your one-time payment.</p>
+
+            <a href="{{ url_for('create_checkout_session') }}" class="btn" style="display:block; text-align:center; background:#2ecc71; border:none; padding:15px; font-weight:bold; text-decoration:none;">
+                Pay with Stripe
+            </a>
+
+            <p style="text-align:center; margin-top:15px;">
+                <a href="{{ url_for('index') }}" class="muted">Maybe later</a>
+            </p>
+        </div>
+    </div>
+</div>
+
+{% endblock %}

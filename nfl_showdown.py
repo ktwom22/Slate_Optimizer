@@ -52,7 +52,7 @@ import requests
 # -----------------------------
 CSV_URL_DEFAULT = os.environ.get(
     "NFL_SHOWDOWN_CSV_URL",
-    "https://docs.google.com/spreadsheets/d/e/2PACX-1vSExcKi8LiRgnZpx9JeIRpgFMfYCFxgfdixu6oZxD2FhUG5UwyI86QDYC1ImTPAIPGdDMizdrYWSWP3/pub?gid=1791525610&single=true&output=csv",
+    "https://docs.google.com/spreadsheets/d/e/2PACX-1vSExcKi8LiRgnZpx9JeIRpgFMfYCFxgfdixu6oZxD2FhUG5UwyI86QDYC1ImTPAIPGdDMizdrYWSWP3/pub?gid=308391774&single=true&output=csv",
 )
 
 SALARY_CAP_DEFAULT = 50000

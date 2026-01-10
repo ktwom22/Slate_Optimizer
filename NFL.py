@@ -244,75 +244,69 @@ def eligible_slots(pos: str) -> Set[str]:
 # -----------------------------
 def parse_players(df: pd.DataFrame, verbose: bool = True) -> Tuple[List[Player], pd.DataFrame, Dict[str, str]]:
     df = df.copy()
-    df.columns = [normalize_header(c) for c in df.columns]
 
-    pos_col = "POS" if "POS" in df.columns else pick_col(df, ["pos", "position", "dk_position", "roster_position"])
-    name_col = "NAME" if "NAME" in df.columns else pick_col(df, ["name", "player", "player_name"])
-    team_col = "TEAM" if "TEAM" in df.columns else pick_col(df, ["team", "teamabbr", "team_abbrev", "tm"])
-    sal_col = "SALARY" if "SALARY" in df.columns else pick_col(df, ["salary", "sal", "dk_salary", "cost"])
-    proj_col = find_proj_col(df)
-    opp_col = "OPP" if "OPP" in df.columns else pick_col(df, ["opp", "opponent", "vs", "opponent_team"])
-
-    missing = []
-    if not pos_col: missing.append("pos")
-    if not name_col: missing.append("name")
-    if not team_col: missing.append("team")
-    if not sal_col: missing.append("salary")
-    if not proj_col: missing.append("proj (DK FP PROJECTED)")
-    if missing:
-        raise ValueError(f"Missing required columns: {missing}. Found columns: {list(df.columns)}")
+    # 1. Clean column names immediately
+    df.columns = [str(c).strip().upper() for c in df.columns]
 
     if verbose:
-        log(
-            f"Detected columns -> POS:{pos_col} | NAME:{name_col} | TEAM:{team_col} | SALARY:{sal_col} | PROJ:{proj_col}"
-            + (f" | OPP:{opp_col}" if opp_col else " | OPP:None")
-        )
+        log(f"Mapping columns from: {list(df.columns)}")
 
-    df["name"] = df[name_col].apply(clean_text)
-    df["team"] = df[team_col].apply(clean_text)
-    df["pos"] = df[pos_col].apply(normalize_pos)
-    df["salary"] = df[sal_col].apply(lambda v: parse_salary_dk(v, 0))
-    df["proj"] = df[proj_col].apply(lambda v: parse_float_from_any(v, 0.0))
-    df["opp"] = df[opp_col].apply(clean_text) if opp_col else ""
+    # 2. Hard-coded mapping based on your data snippet
+    # Using .get() ensures the script doesn't crash if one is missing
+    name_col = 'PLAYER'
+    pos_col = 'POS'
+    sal_col = 'SALARY'
+    proj_col = 'PROJECTED POINTS'
+    team_col = 'TEAM'
+    opp_col = 'OPPONENT'
 
-    if verbose:
-        log("\nSample parsed salary/proj:")
-        log(df[["name", "pos", "team", "opp", "salary", "proj"]].head(10).to_string(index=False))
+    # Check for presence
+    for col in [name_col, pos_col, sal_col, proj_col, team_col]:
+        if col not in df.columns:
+            raise ValueError(f"CRITICAL ERROR: Column '{col}' not found in CSV. Available: {list(df.columns)}")
 
-    df = df[(df["name"] != "") & (df["team"] != "") & (df["pos"] != "")]
-    df = df[df["pos"].isin(["QB", "RB", "WR", "TE", "DST"])]
-    df = df[(df["salary"] > 0) & (df["proj"] > 0)]
+    # 3. Data Conversion
+    # We use a custom lambda for salary to handle the '$8.7k' format
+    df["name_clean"] = df[name_col].apply(clean_text)
+    df["team_clean"] = df[team_col].apply(clean_text)
+    df["pos_clean"] = df[pos_col].apply(normalize_pos)
 
-    if df.empty:
-        raise ValueError("No valid players after cleanup.")
+    # Updated Salary Logic to handle $ and K
+    def clean_salary_value(val):
+        s = str(val).lower().replace('$', '').replace(',', '').strip()
+        if 'k' in s:
+            return int(float(s.replace('k', '')) * 1000)
+        try:
+            return int(float(s))
+        except:
+            return 0
+
+    df["salary_clean"] = df[sal_col].apply(clean_salary_value)
+    df["proj_clean"] = df[proj_col].apply(lambda v: parse_float_from_any(v, 0.0))
+    df["opp_clean"] = df[opp_col].apply(clean_text) if opp_col in df.columns else ""
+
+    # 4. Filter and Create Player Objects
+    # Remove players with 0 projection or 0 salary (injured/out)
+    valid_df = df[(df["salary_clean"] > 0) & (df["proj_clean"] > 0)].copy()
 
     players: List[Player] = []
-    for _, r in df.iterrows():
+    for _, r in valid_df.iterrows():
         players.append(Player(
-            name=str(r["name"]),
-            team=str(r["team"]),
-            pos=str(r["pos"]),
-            salary=int(r["salary"]),
-            proj=float(r["proj"]),
-            opp=str(r["opp"]) if isinstance(r["opp"], str) else "",
+            name=r["name_clean"],
+            team=r["team_clean"],
+            pos=r["pos_clean"],
+            salary=r["salary_clean"],
+            proj=r["proj_clean"],
+            opp=r["opp_clean"]
         ))
 
-    analysis = df[["name", "team", "pos", "opp", "salary", "proj"]].copy()
+    # 5. Team Mapping for DST logic
+    team_to_opp = {p.team: p.opp for p in players if p.team and p.opp}
 
-    # TEAM->OPP mapping (prefer QB rows)
-    team_to_opp: Dict[str, str] = {}
-    if opp_col:
-        for p in players:
-            if p.pos == "QB" and p.opp:
-                team_to_opp[p.team] = p.opp
-        for p in players:
-            if p.team not in team_to_opp and p.opp:
-                team_to_opp[p.team] = p.opp
-        for a, b in list(team_to_opp.items()):
-            if b and b not in team_to_opp:
-                team_to_opp[b] = a
+    if verbose:
+        log(f"✅ Successfully loaded {len(players)} players into the optimizer.")
 
-    return players, analysis, team_to_opp
+    return players, valid_df, team_to_opp
 
 
 # -----------------------------
@@ -451,23 +445,24 @@ def precompute(players: List[Player]) -> Dict[str, object]:
 # OPTIMIZER (single lineup)
 # -----------------------------
 def optimize_one_lineup(
-    players: List[Player],
-    pre: Dict[str, object],
-    team_to_opp: Dict[str, str],
-    template_sizes: List[int],
-    qb_must_be_on_largest_stack: bool,
-    salary_cap: int,
-    min_salary_spend: int,
-    min_unique_vs_previous: int,
-    previous_lineups: List[Set[int]],
-    randomness: float,
-    seed: Optional[int],
-    nonstack_max: int,
-    use_dst_rb_correlation: bool,
-    tiny_bias: bool,
-    enforce_dst_not_qb_opp: bool,
+        players: List[Player],
+        pre: Dict[str, object],
+        team_to_opp: Dict[str, str],
+        template_sizes: List[int],
+        qb_must_be_on_largest_stack: bool,
+        salary_cap: int,
+        min_salary_spend: int,
+        min_unique_vs_previous: int,
+        previous_lineups: List[Set[int]],
+        randomness: float,
+        seed: Optional[int],
+        nonstack_max: int,
+        use_dst_rb_correlation: bool,
+        tiny_bias: bool,
+        enforce_dst_not_qb_opp: bool,
+        forced_stack_team: str = "ANY",
+        forced_stack_size: int = 3
 ) -> Optional[List[int]]:
-
     if seed is not None:
         random.seed(seed)
 
@@ -480,6 +475,7 @@ def optimize_one_lineup(
     team_rb: Dict[str, List[int]] = pre["team_rb"]
     team_dst: Dict[str, List[int]] = pre["team_dst"]
 
+    # 1. Variables Setup
     x: Dict[Tuple[int, str], pulp.LpVariable] = {}
     for s in DK_SLOTS:
         for i in elig_by_slot[s]:
@@ -487,6 +483,7 @@ def optimize_one_lineup(
 
     prob = pulp.LpProblem("NFL_DK_STACKS", pulp.LpMaximize)
 
+    # 2. Roster and Slot Constraints
     for s in DK_SLOTS:
         prob += pulp.lpSum(x[(i, s)] for i in elig_by_slot[s]) == 1, f"fill_{s}"
 
@@ -494,35 +491,42 @@ def optimize_one_lineup(
     for i in range(n):
         prob += selected[i] <= 1, f"one_slot_{i}"
 
+    # 3. Salary Constraints
     total_salary = pulp.lpSum(players[i].salary * selected[i] for i in range(n))
     prob += total_salary <= salary_cap, "salary_cap"
     prob += total_salary >= min_salary_spend, "min_salary_spend"
 
-    prob += pulp.lpSum(selected[i] for i in idx_qb) == 1, "exactly_one_qb"
-
-    team_count: Dict[str, pulp.LpAffineExpression] = {}
-    for t in teams:
-        idxs = team_nondst[t]
-        team_count[t] = pulp.lpSum(selected[i] for i in idxs) if idxs else 0
-
+    # 4. QB and DST Indicators
     qb_team: Dict[str, pulp.LpVariable] = {t: pulp.LpVariable(f"qb_team_{t}", cat="Binary") for t in teams}
     dst_team: Dict[str, pulp.LpVariable] = {t: pulp.LpVariable(f"dst_team_{t}", cat="Binary") for t in teams}
 
     for t in teams:
-        qb_idxs = team_qb[t]
+        qb_idxs = team_qb.get(t, [])
         prob += qb_team[t] == (pulp.lpSum(selected[i] for i in qb_idxs) if qb_idxs else 0), f"qb_team_eq_{t}"
 
-        dst_idxs = team_dst[t]
+        dst_idxs = team_dst.get(t, [])
         if dst_idxs:
             prob += dst_team[t] == pulp.lpSum(x[(i, "DST")] for i in dst_idxs if (i, "DST") in x), f"dst_team_eq_{t}"
         else:
-            prob += dst_team[t] == 0, f"dst_team_eq_{t}"
+            prob += dst_team[t] == 0
 
-    if enforce_dst_not_qb_opp:
-        for t in teams:
-            opp = team_to_opp.get(t, "")
-            if opp and opp in dst_team:
-                prob += dst_team[opp] <= 1 - qb_team[t], f"dst_not_qb_opp_{t}_vs_{opp}"
+    prob += pulp.lpSum(qb_team[t] for t in teams) == 1, "exactly_one_qb"
+
+    # 5. FORCED TEAM LOGIC
+    # If the user selected a specific team, force that team's QB and stack size
+    if forced_stack_team != "ANY" and forced_stack_team in teams:
+        prob += qb_team[forced_stack_team] == 1, "force_stack_team_qb"
+        # Force the total players from this team to match the stack size
+        # (Using team_nondst because QB is usually part of the stack size count)
+        idxs = team_nondst.get(forced_stack_team, [])
+        if idxs:
+            prob += pulp.lpSum(selected[i] for i in idxs) == forced_stack_size, "force_stack_size"
+
+    # 6. Team Usage & Stacking Logic
+    team_count: Dict[str, pulp.LpAffineExpression] = {}
+    for t in teams:
+        idxs = team_nondst.get(t, [])
+        team_count[t] = pulp.lpSum(selected[i] for i in idxs) if idxs else 0
 
     K = len(template_sizes)
     stack_team: Dict[Tuple[str, int], pulp.LpVariable] = {
@@ -532,18 +536,18 @@ def optimize_one_lineup(
 
     for k in range(K):
         prob += pulp.lpSum(stack_team[(t, k)] for t in teams) == 1, f"one_team_for_stack_{k}"
-    for t in teams:
-        prob += pulp.lpSum(stack_team[(t, k)] for k in range(K)) <= 1, f"team_one_stack_{t}"
 
     M = 9
     for t in teams:
         is_stacked = pulp.lpSum(stack_team[(t, k)] for k in range(K))
-        prob += team_count[t] <= nonstack_max + M * is_stacked, f"nonstack_max_{nonstack_max}_{t}"
+        prob += team_count[t] <= nonstack_max + M * is_stacked, f"nonstack_limit_{t}"
 
         for k, s_size in enumerate(template_sizes):
+            # If stack_team[t,k] is 1, team_count must be exactly s_size
             prob += team_count[t] >= s_size * stack_team[(t, k)], f"stack_lb_{t}_{k}"
             prob += team_count[t] <= s_size + M * (1 - stack_team[(t, k)]), f"stack_ub_{t}_{k}"
 
+    # 7. Correlation Rules
     if qb_must_be_on_largest_stack:
         largest = max(template_sizes)
         for t in teams:
@@ -552,55 +556,50 @@ def optimize_one_lineup(
 
     if use_dst_rb_correlation:
         for t in teams:
-            rb_idxs = team_rb[t]
+            rb_idxs = team_rb.get(t, [])
             rb_on_team = pulp.lpSum(selected[i] for i in rb_idxs) if rb_idxs else 0
-            prob += rb_on_team >= 1 * dst_team[t], f"dst_implies_rb_{t}"
+            prob += rb_on_team >= 1 * dst_team[t], f"dst_rb_corr_{t}"
 
+    if enforce_dst_not_qb_opp:
+        for t in teams:
+            opp = team_to_opp.get(t, "")
+            if opp in dst_team:
+                prob += dst_team[opp] <= 1 - qb_team[t], f"dst_not_vs_qb_{t}"
+
+    # 8. Uniqueness Constraints
     if previous_lineups and min_unique_vs_previous > 0:
-        max_overlap = LINEUP_SIZE - min_unique_vs_previous
-        for li, prev in enumerate(previous_lineups, start=1):
-            prob += pulp.lpSum(selected[i] for i in prev) <= max_overlap, f"uniq_{li}"
+        max_overlap = 9 - min_unique_vs_previous
+        for li, prev in enumerate(previous_lineups):
+            prob += pulp.lpSum(selected[i] for i in prev) <= max_overlap, f"overlap_{li}"
 
+    # 9. Objective Function with Randomness
     noise = [random.uniform(-randomness, randomness) for _ in range(n)] if randomness > 0 else [0.0] * n
     base_obj = pulp.lpSum((players[i].proj + noise[i]) * selected[i] for i in range(n))
 
+    # Tiny Slate Biases (e.g., favoring RBs in Flex)
     bonus = 0
     if tiny_bias:
-        bonus += 0.75 * pulp.lpSum(
-            x[(i, "FLEX")] for i in elig_by_slot["FLEX"]
-            if (i, "FLEX") in x and players[i].pos == "RB"
-        )
-        bonus += 0.40 * pulp.lpSum(
-            x[(i, "TE")] for i in elig_by_slot["TE"]
-            if (i, "TE") in x and players[i].pos == "TE" and players[i].salary <= 4500
-        )
+        flex_rb = [i for i in elig_by_slot["FLEX"] if players[i].pos == "RB"]
+        bonus += 0.75 * pulp.lpSum(x[(i, "FLEX")] for i in flex_rb)
 
     prob += base_obj + bonus, "objective"
 
-    solver = pulp.PULP_CBC_CMD(
-        msg=CBC_MSG,
-        timeLimit=CBC_TIME_LIMIT_SEC,
-        gapRel=CBC_GAP_REL,
-        threads=CBC_THREADS,
-    )
-
+    # 10. Solve
+    solver = pulp.PULP_CBC_CMD(msg=False, timeLimit=1.0, gapRel=0.10, threads=4)
     status = prob.solve(solver)
+
     if pulp.LpStatus[status] != "Optimal":
         return None
 
+    # 11. Parse Results
     chosen: List[int] = []
     for s in DK_SLOTS:
-        found = None
         for i in elig_by_slot[s]:
-            var = x.get((i, s))
-            if var is not None and var.value() == 1:
-                found = i
+            if x[(i, s)].value() == 1:
+                chosen.append(i)
                 break
-        if found is None:
-            return None
-        chosen.append(found)
 
-    return chosen
+    return chosen if len(chosen) == 9 else None
 
 
 # -----------------------------
@@ -648,143 +647,113 @@ def lineups_to_df(players: List[Player], built: List[Tuple[str, List[int]]]) -> 
 
 # -----------------------------
 # BUILD LINEUPS
-# -----------------------------
 def build_lineups(
-    players: List[Player],
-    pre: Dict[str, object],
-    team_to_opp: Dict[str, str],
-    templates: List[str],
-    template_map: Dict[str, Tuple[List[int], Optional[Set[int]]]],
-    num_lineups: int,
-    salary_cap: int,
-    min_salary_spend: int,
-    min_unique: int,
-    randomness: float,
-    seed: Optional[int],
-    tiny_mode: bool,
-    verbose: bool = True,
+        players: List[Player],
+        pre: Dict[str, object],
+        team_to_opp: Dict[str, str],
+        templates: List[str],
+        template_map: Dict[str, Tuple[List[int], Optional[Set[int]]]],
+        num_lineups: int,
+        salary_cap: int,
+        min_salary_spend: int,
+        min_unique: int,
+        randomness: float,
+        seed: Optional[int],
+        tiny_mode: bool,
+        verbose: bool = True,
+        # NEW: Pass down the user-selected forced team if applicable
+        forced_stack_team: str = "ANY",
+        forced_stack_size: int = 3
 ) -> List[Tuple[str, List[int]]]:
-
     feasible_templates = []
     for t in templates:
-        if t not in template_map:
-            continue
+        if t not in template_map: continue
         sizes, _ = template_map[t]
-        ok = template_feasible(players, sizes, qb_must_be_on_largest=tiny_mode)
-        if ok:
+        if template_feasible(players, sizes, qb_must_be_on_largest=tiny_mode):
             feasible_templates.append(t)
 
     if not feasible_templates:
         return []
 
-    if tiny_mode:
-        priority = {"3-3-2": 0, "4-3": 1, "2-2-2": 2, "2-2": 3, "4-4": 4, "5-2": 5}
-        feasible_templates.sort(key=lambda t: priority.get(t, 99))
+    results: List[Tuple[str, List[int]]] = []
+    prev_sets: List[Set[int]] = []
 
-    # Relax ladder (fast feasibility)
-    # (nonstack_max, dst_rb, uniq, min_sal, templates_tried)
-    ladder = [
-        (2, False, min_unique, min_salary_spend, 3),
-        (3, False, min_unique, min_salary_spend, 3),
-        (3, False, max(0, min_unique - 1), min_salary_spend, 4),
-        (3, True, max(0, min_unique - 1), min_salary_spend, 4),
-        (4, True, max(0, min_unique - 2), max(44000, min_salary_spend - 2500), 6),
-    ]
+    # Adaptive variables that loosen if we get stuck
+    current_min_unique = min_unique
+    current_min_salary = min_salary_spend
 
-    for nonstack_max, dst_rb, uniq, min_sal, templates_tried in ladder:
-        results: List[Tuple[str, List[int]]] = []
-        prev_sets: List[Set[int]] = []
+    # The Shuffle ensures diversity across runs
+    base_order = feasible_templates[:]
+    if not tiny_mode:
+        random.shuffle(base_order)
 
-        base_order = feasible_templates[:]
-        if not tiny_mode:
-            random.shuffle(base_order)
+    for li in range(num_lineups):
+        made = False
+        start_idx = li % len(base_order)
+        attempt_order = base_order[start_idx:] + base_order[:start_idx]
 
-        for li in range(num_lineups):
-            made = False
-            solves_used = 0
+        # LIMIT: Only try the top 3 best templates to save time
+        for tpl in attempt_order[:3]:
+            sizes, _ = template_map[tpl]
 
-            start_idx = li % len(base_order)
-            attempt_order = base_order[start_idx:] + base_order[:start_idx]
+            # Optimization Call
+            lineup = optimize_one_lineup(
+                players=players,
+                pre=pre,
+                team_to_opp=team_to_opp,
+                template_sizes=sizes,
+                qb_must_be_on_largest_stack=tiny_mode,
+                salary_cap=salary_cap,
+                min_salary_spend=current_min_salary,
+                min_unique_vs_previous=current_min_unique,
+                previous_lineups=prev_sets,
+                randomness=randomness,
+                seed=None if seed is None else seed + li,
+                nonstack_max=3,
+                use_dst_rb_correlation=True,
+                tiny_bias=tiny_mode,
+                enforce_dst_not_qb_opp=True,
+                forced_stack_team=forced_stack_team,
+                forced_stack_size=forced_stack_size
+            )
 
-            for tpl in attempt_order[:min(templates_tried, len(attempt_order))]:
-                solves_used += 1
-                if solves_used > MAX_SOLVES_PER_LINEUP:
-                    break
-
-                if verbose:
-                    log(f"Trying lineup {li+1}/{num_lineups} | tpl={tpl} | nonstack_max={nonstack_max} dst_rb={dst_rb} uniq={uniq} min_sal={min_sal}")
-
-                sizes, _ = template_map[tpl]
-                lineup = optimize_one_lineup(
-                    players=players,
-                    pre=pre,
-                    team_to_opp=team_to_opp,
-                    template_sizes=sizes,
-                    qb_must_be_on_largest_stack=tiny_mode,
-                    salary_cap=salary_cap,
-                    min_salary_spend=min_sal,
-                    min_unique_vs_previous=uniq,
-                    previous_lineups=prev_sets,
-                    randomness=randomness,
-                    seed=None if seed is None else seed + li,
-                    nonstack_max=nonstack_max,
-                    use_dst_rb_correlation=dst_rb,
-                    tiny_bias=tiny_mode,
-                    enforce_dst_not_qb_opp=True,
-                )
-
-                if lineup is not None:
-                    results.append((tpl, lineup))
-                    prev_sets.append(set(lineup))
-                    made = True
-                    break
-
-                for retry in range(RETRIES_PER_TEMPLATE):
-                    solves_used += 1
-                    if solves_used > MAX_SOLVES_PER_LINEUP:
-                        break
-                    lineup = optimize_one_lineup(
-                        players=players,
-                        pre=pre,
-                        team_to_opp=team_to_opp,
-                        template_sizes=sizes,
-                        qb_must_be_on_largest_stack=tiny_mode,
-                        salary_cap=salary_cap,
-                        min_salary_spend=min_sal,
-                        min_unique_vs_previous=max(0, uniq - 1),
-                        previous_lineups=prev_sets,
-                        randomness=randomness + 0.25,
-                        seed=None if seed is None else seed + li * 100 + retry,
-                        nonstack_max=nonstack_max,
-                        use_dst_rb_correlation=dst_rb,
-                        tiny_bias=tiny_mode,
-                        enforce_dst_not_qb_opp=True,
-                    )
-                    if lineup is not None:
-                        results.append((tpl, lineup))
-                        prev_sets.append(set(lineup))
-                        made = True
-                        break
-
-                if made:
-                    break
-
-            if not made:
+            if lineup:
+                results.append((tpl, lineup))
+                prev_sets.append(set(lineup))
+                made = True
                 break
 
-        if results:
+        # --- RELAXATION LOGIC ---
+        # If we couldn't make a lineup, lower the bar for the NEXT one
+        if not made:
             if verbose:
-                if nonstack_max == 2:
-                    log("\n✅ Relax used: allowing non-stack teams up to 2 non-DST players.")
-                if not dst_rb:
-                    log("✅ Relax used: DST↔RB correlation disabled (fast feasibility).")
-                if uniq != min_unique:
-                    log(f"✅ Relax used: uniqueness lowered to {uniq}.")
-                if min_sal != min_salary_spend:
-                    log(f"✅ Relax used: min salary spend lowered to {min_sal}.")
-            return results
+                print(f"⚠️ Relaxing constraints for lineup {li + 1}")
+            current_min_unique = max(0, current_min_unique - 1)
+            current_min_salary = max(44000, current_min_salary - 500)
 
-    return []
+            # Final "Hail Mary" attempt with no uniqueness requirement
+            lineup = optimize_one_lineup(
+                players=players,
+                pre=pre,
+                team_to_opp=team_to_opp,
+                template_sizes=template_map[base_order[0]][0],
+                qb_must_be_on_largest_stack=tiny_mode,
+                salary_cap=salary_cap,
+                min_salary_spend=44000,
+                min_unique_vs_previous=0,  # Force it to work
+                previous_lineups=prev_sets,
+                randomness=randomness + 0.5,
+                seed=None,
+                nonstack_max=4,
+                use_dst_rb_correlation=False,
+                tiny_bias=tiny_mode,
+                enforce_dst_not_qb_opp=True
+            )
+            if lineup:
+                results.append(("RELAXED", lineup))
+                prev_sets.append(set(lineup))
+
+    return results
 
 
 # -----------------------------

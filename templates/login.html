@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="hero">
+    <h1>Welcome Back</h1>
+    <p>Log in to access your optimized lineups.</p>
+</div>
+
+<div style="max-width: 450px; margin: 40px auto;">
+    <div class="card" style="border-top: 4px solid #2ecc71;">
+        <div class="card-h">
+            <h2>User Login</h2>
+        </div>
+        <div class="card-b">
+            <form method="POST">
+                <div style="margin-bottom: 15px;">
+                    <label class="muted" style="display:block; margin-bottom:5px;">Username</label>
+                    <input type="text" name="username" required style="width:100%; padding:10px; border-radius:4px; border:1px solid #ddd;">
+                </div>
+                <div style="margin-bottom: 20px;">
+                    <label class="muted" style="display:block; margin-bottom:5px;">Password</label>
+                    <input type="password" name="password" required style="width:100%; padding:10px; border-radius:4px; border:1px solid #ddd;">
+                </div>
+                <button type="submit" class="btn" style="width:100%; background:#2ecc71; border:none; padding:12px; font-weight:bold;">
+                    Sign In
+                </button>
+            </form>
+            <p class="muted" style="margin-top: 20px; text-align: center;">
+                Need an account? <a href="{{ url_for('register') }}" style="color:#2ecc71; text-decoration:none;">Register here</a>
+            </p>
+        </div>
+    </div>
+</div>
+
+{% endblock %}

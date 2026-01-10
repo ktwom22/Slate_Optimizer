@@ -1,79 +1,87 @@
 {% extends "base.html" %}
 {% block content %}
 
-<!-- SEO Metadata -->
-<title>NFL DraftKings Lineup Optimizer | Build Winning DFS Lineups</title>
-<meta name="description" content="Generate optimized NFL lineups for DraftKings DFS contests. Use stacking templates, unique player constraints, and randomness to build winning lineups.">
-<meta name="keywords" content="NFL lineup optimizer, DraftKings NFL optimizer, DFS stacking templates, fantasy football, DFS strategy, lineup diversity">
+<style>
+  #loading-overlay {
+    display: none;
+    position: fixed;
+    top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(0, 0, 0, 0.85);
+    color: white;
+    z-index: 9999;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+  }
+  .spinner {
+    border: 5px solid rgba(255, 255, 255, 0.1);
+    border-top: 5px solid #3498db;
+    border-radius: 50%;
+    width: 50px; height: 50px;
+    animation: spin 1s linear infinite;
+    margin-bottom: 20px;
+  }
+  @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+</style>
 
-<!-- Page Content -->
+<div id="loading-overlay">
+  <div class="spinner"></div>
+  <h2>Building Lineups...</h2>
+  <p>Solving constraints and checking team stacks.</p>
+</div>
+
 <div class="grid two">
-  <!-- NFL Generator Form -->
   <div class="card">
     <div class="card-h">
-      <h1>NFL Lineup Generator</h1>
-      <p>Create optimized NFL DraftKings lineups using stacking strategies and fine-tuned constraints.</p>
+      <h1>NFL Optimizer Settings</h1>
     </div>
     <div class="card-b">
-      <form class="form" method="POST">
+      <form id="optimizer-form" method="POST" action="{{ url_for('nfl') }}">
+
         <div class="row2">
           <div>
-            <label>
-              Number of Lineups
-              <span class="hint">How many lineups you want to generate</span>
-            </label>
-            <input name="num_lineups" type="number" min="1" max="150" value="20" title="Enter the number of lineups to generate for NFL DFS" />
+            <label>Number of Lineups</label>
+            <input name="num_lineups" type="number" value="20" min="1" max="150">
           </div>
-
           <div>
-            <label>
-              Minimum Salary Spend
-              <span class="hint">Set a minimum salary constraint for your lineup</span>
-            </label>
-            <input name="min_salary" type="number" min="0" max="50000" value="46000" title="Enter the minimum total salary for your lineup" />
+            <label>Min Salary</label>
+            <input name="min_salary" type="number" value="46000" step="100">
           </div>
         </div>
 
         <div class="row2">
           <div>
-            <label>
-              Minimum Unique Players
-              <span class="info" data-tip="The minimum number of unique players between any two lineups. Higher values increase lineup variety but may reduce feasibility.">i</span>
-            </label>
-            <input name="min_unique" type="number" min="0" max="8" value="2" title="Set the minimum number of unique players between lineups" />
+            <label>Min Unique Players</label>
+            <input name="min_unique" type="number" value="2" min="0" max="8">
           </div>
-
           <div>
-            <label>
-              Randomness
-              <span class="info" data-tip="Adds small randomness to player projections to create diverse lineups. Higher values create more diversity but slightly less 'optimal' lineups. Suggested: 0.6–1.2">i</span>
-            </label>
-            <input name="randomness" type="number" step="0.1" min="0" max="3" value="1.0" title="Add randomness to player projections to vary lineups" />
+            <label>Randomness</label>
+            <input name="randomness" type="number" step="0.1" value="1.0">
           </div>
         </div>
 
-        <button class="btn" type="submit" title="Generate your lineups">Generate NFL Lineups</button>
-        <div class="footer-note">
-          🏈 **Pro Tip:** If the script times out, try generating fewer lineups or lowering constraints like "Min Salary" or "Min Unique."
-        </div>
+        <button class="btn" type="submit" style="width:100%; margin-top:20px;">Generate NFL Lineups</button>
       </form>
     </div>
   </div>
 
-  <!-- Notes Section -->
   <div class="card">
-    <div class="card-h">
-      <h2>How Lineups Appear</h2>
-      <p>Here’s what you’ll see after generation:</p>
-    </div>
+    <div class="card-h"><h2>Strategy Rules</h2></div>
     <div class="card-b">
-      <ul style="margin:0; padding-left:18px; color:var(--muted); font-size:13px;">
-        <li>Each lineup formatted as: POS / Player Name / Team / Salary / Projection</li>
-        <li>Lineup header displays the total salary and projected points for quick review</li>
-        <li>If enabled, you’ll see stack templates like "3-3-2" with team usage details</li>
+      <ul class="muted" style="font-size: 14px; line-height: 1.8;">
+        <li><strong>Automatic Stacking:</strong> Uses 3-2, 2-2-2, and 3-3-2 templates.</li>
+        <li><strong>QB/DST Rule:</strong> Prevents playing a Defense against your QB.</li>
+        <li><strong>RB/DST Logic:</strong> Encourages positive correlation between RB and Defense.</li>
       </ul>
     </div>
   </div>
 </div>
+
+<script>
+  // Show overlay on click
+  document.getElementById('optimizer-form').addEventListener('submit', function() {
+    document.getElementById('loading-overlay').style.display = 'flex';
+  });
+</script>
 
 {% endblock %}

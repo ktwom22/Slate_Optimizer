@@ -2,86 +2,70 @@
 {% block content %}
 
 <div class="hero">
-  <h1>Build Smarter DraftKings Lineups</h1>
-  <p>
-    Create optimized NFL, NBA, and NHL lineups using projections, stacking logic,
-    and lineup diversity — built for DFS players, not spreadsheets.
-  </p>
+  <h1>DFS Lineup Optimizer</h1>
+  <p>Select a sport to begin building optimized DraftKings lineups.</p>
 </div>
 
-<div class="grid three" style="margin-top:20px;">
-  <!-- NFL -->
-  <div class="card">
+<div class="grid four" style="margin-top:20px; display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px;">
+
+  <div class="card" style="border-top: 4px solid #e74c3c; display: flex; flex-direction: column;">
     <div class="card-h">
       <h2>🏈 NFL Classic</h2>
     </div>
-    <div class="card-b">
-      <p class="muted">
-        Full-slate NFL optimizer with QB stacks, salary control, and lineup uniqueness.
-      </p>
-      <ul class="muted" style="padding-left:18px; font-size:13px;">
-        <li>QB + pass catcher logic</li>
-        <li>Cash & GPP friendly</li>
-        <li>150-max ready</li>
-      </ul>
-      <a class="btn" href="{{ url_for('nfl') }}">Build NFL Lineups</a>
+    <div class="card-b" style="flex-grow: 1; display: flex; flex-direction: column; justify-content: space-between;">
+      <p class="muted">Full-slate optimization with QB/Pass-catcher stacks and RB/DST correlation rules.</p>
+      <a class="btn" href="{{ url_for('nfl') }}" style="display:block; text-align:center; margin-top:15px; background: #e74c3c; border-color: #e74c3c;">Open NFL Tools</a>
     </div>
   </div>
 
-  <!-- NBA -->
-  <div class="card">
+  <div class="card" style="border-top: 4px solid #f1c40f; display: flex; flex-direction: column;">
+    <div class="card-h">
+      <h2>⚡ NFL Showdown</h2>
+    </div>
+    <div class="card-b" style="flex-grow: 1; display: flex; flex-direction: column; justify-content: space-between;">
+      <p class="muted">Single-game builds. 1.5x Captain multiplier logic and 5-man Flex onslaught constraints.</p>
+      <a class="btn" href="{{ url_for('nfl_showdown_route') }}" style="display:block; text-align:center; margin-top:15px; background: #f1c40f; color: #000; border-color: #f1c40f;">Open Showdown</a>
+    </div>
+  </div>
+
+  <div class="card" style="border-top: 4px solid #f39c12; display: flex; flex-direction: column;">
     <div class="card-h">
       <h2>🏀 NBA Classic</h2>
     </div>
-    <div class="card-b">
-      <p class="muted">
-        NBA optimizer built for late news, value plays, and ownership leverage.
-      </p>
-      <ul class="muted" style="padding-left:18px; font-size:13px;">
-        <li>Projected ownership tiers</li>
-        <li>Chalk vs sneaky balance</li>
-        <li>UTIL optimization</li>
-      </ul>
-      <a class="btn" href="{{ url_for('nba') }}">Build NBA Lineups</a>
+    <div class="card-b" style="flex-grow: 1; display: flex; flex-direction: column; justify-content: space-between;">
+      <p class="muted">Projection variance, ownership leverage, and late-swap value optimization.</p>
+      <a class="btn" href="{{ url_for('nba') }}" style="display:block; text-align:center; margin-top:15px; background: #f39c12; border-color: #f39c12;">Open NBA Tools</a>
     </div>
   </div>
 
-  <!-- NHL -->
-  <div class="card">
+  <div class="card" style="border-top: 4px solid #3498db; display: flex; flex-direction: column;">
     <div class="card-h">
       <h2>🏒 NHL Classic</h2>
     </div>
-    <div class="card-b">
-      <p class="muted">
-        NHL optimizer with exact stack control — goalies excluded from stacks.
-      </p>
-      <ul class="muted" style="padding-left:18px; font-size:13px;">
-        <li>3-2-2, 4-3, custom stacks</li>
-        <li>Skaters-only stacking</li>
-        <li>Correlation-focused</li>
-      </ul>
-      <a class="btn" href="{{ url_for('nhl') }}">Build NHL Lineups</a>
+    <div class="card-b" style="flex-grow: 1; display: flex; flex-direction: column; justify-content: space-between;">
+      <p class="muted">Skater-only line stacking (3-2, 3-3) and GPP-focused goalie correlation.</p>
+      <a class="btn" href="{{ url_for('nhl') }}" style="display:block; text-align:center; margin-top:15px; background: #3498db; border-color: #3498db;">Open NHL Tools</a>
     </div>
   </div>
+
 </div>
 
-<div class="card" style="margin-top:22px;">
+<div class="card" style="margin-top:22px; border-left: 4px solid #2ecc71;">
   <div class="card-h">
-    <h2>Why This Optimizer?</h2>
+    <h2>Optimizer Philosophy</h2>
   </div>
   <div class="card-b">
     <div class="grid two">
       <div>
-        <p><strong>Built for DFS players</strong></p>
+        <p><strong>Correlated Over Optimal</strong></p>
         <p class="muted">
-          No bloated features, no black boxes. You control stacking, salary usage,
-          randomness, and lineup diversity.
+          Linear solvers find the highest ceiling, but correlations win tournaments. We force stacks to mirror winning profiles.
         </p>
       </div>
       <div>
-        <p><strong>Fast & Local</strong></p>
+        <p><strong>Low Latency</strong></p>
         <p class="muted">
-          No accounts, no limits, no uploads.
+          Optimized math and CBC solver integration allow for generation of 20-150 lineups in seconds.
         </p>
       </div>
     </div>

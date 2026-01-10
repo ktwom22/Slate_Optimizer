@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="hero">
+    <h1>Get Pro Access</h1>
+    <p>Create your account and unlock all optimizers for $5.00</p>
+</div>
+
+<div style="max-width: 450px; margin: 40px auto;">
+    <div class="card" style="border-top: 4px solid #2ecc71;">
+        <div class="card-h" style="text-align: center;">
+            <h2 style="margin-bottom: 0;">Step 1: Create Account</h2>
+            <p class="muted">All-Sports Access until April 1st</p>
+        </div>
+
+        <div class="card-b">
+            <div style="text-align: center; padding: 15px; background: #f0fff4; border-radius: 8px; margin-bottom: 20px; border: 1px dashed #2ecc71;">
+                <h1 style="margin: 0; color: #2ecc71;">$5.00</h1>
+                <p class="muted" style="margin: 5px 0 0 0; font-size: 0.85em;">One-time payment • No recurring fees</p>
+            </div>
+
+            <form method="POST">
+                <div style="margin-bottom: 15px;">
+                    <label class="muted" style="display:block; margin-bottom:5px;">Username</label>
+                    <input type="text" name="username" required style="width:100%; padding:10px; border-radius:4px; border:1px solid #ddd; box-sizing: border-box;">
+                </div>
+                <div style="margin-bottom: 20px;">
+                    <label class="muted" style="display:block; margin-bottom:5px;">Password</label>
+                    <input type="password" name="password" required style="width:100%; padding:10px; border-radius:4px; border:1px solid #ddd; box-sizing: border-box;">
+                </div>
+
+                <button type="submit" class="btn" style="width:100%; background:#2ecc71; border:none; padding:15px; font-weight:bold; font-size: 1.1em;">
+                    Register & Pay $5.00
+                </button>
+            </form>
+
+            <p class="muted" style="margin-top: 20px; text-align: center;">
+                Already have an account? <a href="{{ url_for('login') }}" style="color:#2ecc71; text-decoration:none;">Login here</a>
+            </p>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
