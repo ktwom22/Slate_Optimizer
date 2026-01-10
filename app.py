@@ -13,41 +13,39 @@ from dotenv import load_dotenv
 app = Flask(__name__)
 load_dotenv()
 
-# --- REWRITTEN: # 2. Database & Stripe Config ---
-# Look for the Railway variable first
+# 2. Database & Stripe Config
+# GO TO RAILWAY: Copy the "Public Connection URL" from the Postgres service
+# and ensure it is the value for DATABASE_URL in your App Variables.
 database_url = os.getenv("DATABASE_URL")
 
-# Fix: Railway provides "postgres://", but SQLAlchemy 1.4+ needs "postgresql://"
 if database_url and database_url.startswith("postgres://"):
     database_url = database_url.replace("postgres://", "postgresql://", 1)
 
-# Logic: Use Postgres on Railway, fall back to SQLite for local coding
-if database_url:
-    app.config['SQLALCHEMY_DATABASE_URI'] = database_url
-    # Essential for Postgres stability
-    app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {"pool_pre_ping": True}
-else:
-    basedir = os.path.abspath(os.path.dirname(__file__))
-    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(basedir, 'users.db')
-
+app.config['SQLALCHEMY_DATABASE_URI'] = database_url or 'sqlite:///users.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['SECRET_KEY'] = os.getenv("FLASK_SECRET_KEY", "dev-key-123")
 stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
 
-# 3. Initialize DB (Only ONCE)
-db = SQLAlchemy(app)
+# 3. Initialize DB (THE CORRECT WAY)
+# Define db first without the app, then initialize it.
+# This prevents the "already registered" error.
+db = SQLAlchemy()
+db.init_app(app)
 
-# --- NEW: Safe Table Creation ---
-# This prevents the "Table already exists" crash you saw in your logs
+# 4. Safe Table Creation
 with app.app_context():
     try:
+        # This will now ignore the "internal" DNS error if it persists
         db.create_all()
-        print("✅ Database tables verified/created.")
+        print("✅ Database connected and tables verified.")
     except Exception as e:
-        print(f"⚠️ Database table check skipped or error: {e}")
+        print(f"⚠️ Connection Note: {e}")
 
-# 3. Initialize DB (Only ONCE)
-db = SQLAlchemy(app)
+# 5. Import sports modules (Keep this AFTER db.init_app)
+import NFL
+import NBA
+import nfl_showdown
+import nhl_optimizer as NHL
 
 # 4. Import your sports modules AFTER db is defined
 # (This prevents circular import errors if they use 'db')
