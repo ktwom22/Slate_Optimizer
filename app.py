@@ -30,6 +30,11 @@ stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "fallback-if-env-is-missing")
 
 db = SQLAlchemy(app)
+# This creates the database tables automatically on Railway
+with app.app_context():
+    db.create_all()
+    print("Database tables created successfully!")
+
 login_manager = LoginManager(app)
 login_manager.login_view = 'login' # Tells Flask where to send users who aren't logged in
 
