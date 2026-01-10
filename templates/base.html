@@ -356,22 +356,19 @@
         <div class="subtitle">Local optimizer runner · NFL + NBA + NHL</div>
       </div>
 
-      <div class="nav">
+      <div class="nav" style="flex: 1; justify-content: flex-end; align-items: center; gap: 10px;">
         <a class="pill {% if request.path=='/' %}active{% endif %}" href="{{ url_for('index') }}">Home</a>
+        <a class="pill {% if '/nfl_showdown' in request.path %}active{% endif %}" href="{{ url_for('nfl_showdown_route') }}">NFL Showdown</a>
+        <a class="pill {% if '/nfl' in request.path and 'showdown' not in request.path %}active{% endif %}" href="{{ url_for('nfl') }}">NFL</a>
+        <a class="pill {% if '/nba' in request.path %}active{% endif %}" href="{{ url_for('nba') }}">NBA</a>
+        <a class="pill {% if '/nhl' in request.path %}active{% endif %}" href="{{ url_for('nhl') }}">NHL</a>
 
-        <a class="pill {% if request.path.startswith('/nfl_showdown') %}active{% endif %}"
-           href="{{ url_for('nfl_showdown_route') }}">NFL Showdown</a>
-
-        <a class="pill {% if request.path.startswith('/nfl') and not request.path.startswith('/nfl_showdown') %}active{% endif %}"
-           href="{{ url_for('nfl') }}">NFL</a>
-
-        <a class="pill {% if request.path.startswith('/nba') %}active{% endif %}"
-           href="{{ url_for('nba') }}">NBA</a>
-
-        <a class="pill {% if request.path.startswith('/nhl') %}active{% endif %}"
-           href="{{ url_for('nhl') }}">NHL</a>
-
-
+        {% if current_user.is_authenticated %}
+          <span style="font-size: 12px; color: var(--muted); margin-left: 10px;">{{ current_user.username }}</span>
+          <a href="{{ url_for('logout') }}" style="font-size: 12px; color: var(--danger); font-weight: 800; text-transform: uppercase;">Logout</a>
+        {% else %}
+          <a href="{{ url_for('login') }}" style="font-size: 13px; font-weight: 800; margin-left: 10px; color: var(--text);">Login</a>
+        {% endif %}
       </div>
     </div>
 

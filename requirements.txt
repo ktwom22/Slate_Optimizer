@@ -1,6 +1,7 @@
-Flask
+flask
+flask-sqlalchemy
+flask-login
+flask-bcrypt
+stripe
+python-dotenv
 gunicorn
-pandas
-numpy
-requests
-pulp

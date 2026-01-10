@@ -1,0 +1,22 @@
+# Credentials & Secrets
+.env
+
+# Python Environment
+venv/
+env/
+__pycache__/
+*.py[cod]
+
+# Databases
+instance/
+*.db
+*.sqlite
+
+# OS / IDE Junk
+.vscode/
+.idea/
+.DS_Store
+
+# Static / Exports
+exports/
+*.csv
